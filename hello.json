@@ -1,1 +1,4 @@
-"Hello"
+{
+    "is": "string",
+    "val": "Hello, World!"
+}
