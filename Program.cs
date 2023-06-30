@@ -1,19 +1,11 @@
-﻿using System.IO;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
-using System.Diagnostics;
-using System.Linq;
+﻿using Newtonsoft.Json.Linq;
 using System.Collections.Immutable;
-
-
 
 var random = new Random();
 
 string[] prompts = { "user> ", "what next?> ", "what is my purpose?> ", "say the next piece of the program> " };
 
-
 Dictionary<String, PrimitiveProcedure> primitiveOperators = new();
-
 
 Object Nil = new System.Object();
 
@@ -25,6 +17,9 @@ Object Nil = new System.Object();
 
 // expand environment
 // temp local env
+
+// begin
+// form1
 
 var _globalEnv = ImmutableDictionary<String, Object>.Empty;
 
@@ -65,6 +60,17 @@ primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
     Console.WriteLine("}");
     return null;
 }));
+
+
+primitiveOperators.Add("print", new PrimitiveProcedure("print", list =>
+{
+    Console.Write(String.Join(" ", list.Select(PrintStr)));
+    Console.WriteLine();
+    return null;
+}));
+
+// null? 
+// nil? 
 
 foreach (var kvp in primitiveOperators)
 {
@@ -114,8 +120,11 @@ void Repl()
         var input = Console.ReadLine();
         try
         {
-            var v = Eval(Read(input), _globalEnv);
-            Print(v);
+            if (input != "") {
+                var v = Eval(Read(input), _globalEnv);
+                Print(v);
+            }
+
         }
         catch (Exception e)
         {
@@ -277,6 +286,11 @@ bool IsAssignment(JToken expr)
 
 }
 
+// progn, begin, clojure: do
+bool IsDo(JToken expr) {
+    return IsOperation(expr, "do");
+}
+
 String DefineVariable(String symbol, Object defVal, ImmutableDictionary<String, Object> env)
 {
     _globalEnv = _globalEnv.SetItem(symbol, defVal);
@@ -358,7 +372,7 @@ bool IsEmpty(Object o)
 
 bool IsFalsy(Object o)
 {
-    return o == Nil || IsEmpty(o);
+    return o is Boolean b && b == false ||  o == Nil || IsEmpty(o);
 }
 
 
@@ -367,6 +381,47 @@ bool IsTruthy(Object o)
     return !IsFalsy(o);
 }
 
+bool IsLambda(JToken expr) {
+    return IsOperation(expr, "lambda");
+}
+
+
+// [ "lambda", [], body2,  body1  ]
+// [ "lambda", [[[], 10] [["a"], ["+", "a", 10]]]]
+
+
+// [ "lambda", ["a", "b"], ]
+
+// [ "lambda", ["a", "&", "b"]]
+
+
+IJEnumerable<JToken> LambdaArglist(JToken expr) {
+   return expr.AsJEnumerable().Skip(1).First().AsJEnumerable();
+}
+
+IJEnumerable<JToken> LambdBody(JToken expr) {
+    return expr.AsJEnumerable().Skip(2).AsJEnumerable();
+}
+
+Object EvaluateLambda(JToken expr) {
+    var arglist = LambdaArglist(expr);
+    var name = "anonymous-procedure" + "<" + arglist.Count() + ">";
+    var body = LambdBody(expr);
+    return new CompoundProcedure(name, arglist, body);
+    // return new CompoundProcedureGroup("anon");
+}
+
+
+// Object ApplyCompountProcedure(CompoundProcedure proc, List<Object> arguments, ImmutableDictionary<String, Object> env) {
+
+//     // 1. enhance the environment with bindings arglist -> arguements
+//     // local env
+
+
+//     // eval body 1 by 1
+//     // return the lastt
+    
+// }
 
 
 // [ "if", "predicate", "consequence", "alternative" ]
@@ -377,10 +432,8 @@ Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
     var predExpr = objArr[1];
     var consequenceExpr = objArr[2];
     var alternativeExpr = objArr[3];
-    Console.WriteLine("pred expr: " + predExpr);
     if (IsTruthy(Eval(predExpr, env)))
     {
-        Console.WriteLine("yes, truthy");
         return Eval(consequenceExpr, env);
     }
     else
@@ -405,7 +458,6 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
     if (IsNil(expr))
     {
         return Nil;
-        // put those into the env 
     }
     if (IsAssignment(expr))
     {
@@ -418,6 +470,8 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
     if (IsIf(expr))
     {
         return EvaluateIf(expr, env);
+    } if (IsLambda(expr)) {
+        return EvaluateLambda(expr);
     }
     if (IsApplication(expr))
     {
@@ -431,9 +485,7 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
         Console.Error.WriteLine("Unknown expression type -- EVAL", expr);
     }
 
-    return null;
-
-}
+    return null;}
 
 
 // evaluated args
@@ -443,6 +495,10 @@ Object Apply(Object procedure, List<Object> arguments, ImmutableDictionary<Strin
     {
         return proc.proc.Invoke(arguments);
     }
+    // if (procedure is CompoundProcedure cproc) {
+
+
+    // }
     else
     {
         throw new Exception("Unknown procedure type -- APPLY " + procedure);
@@ -456,3 +512,7 @@ Object Apply(Object procedure, List<Object> arguments, ImmutableDictionary<Strin
 record PrimitiveProcedure(String name, Func<List<Object>, Object> proc);
 
 record Symbol(String name);
+
+record CompoundProcedure(String name, IJEnumerable<JToken> arglist, IJEnumerable<JToken> body);
+
+record CompoundProcedureGroup(String name, Dictionary<int,CompoundProcedure> procedures);
