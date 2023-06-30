@@ -29,8 +29,10 @@ string PrintStr(Object o)
     {
         return "nil";
     }
+    // if (o is IEnumerable<JToken> e) {
+    //     return (new JArray(e.ToArray())).ToString();
+    // }
     return o.ToString();
-
 }
 
 primitiveOperators.Add("+", new PrimitiveProcedure("+", (toAdd) =>
@@ -58,7 +60,7 @@ primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
         Console.WriteLine(kvp.Key + " - " + s);
     }
     Console.WriteLine("}");
-    return null;
+    return Nil;
 }));
 
 
@@ -66,8 +68,16 @@ primitiveOperators.Add("print", new PrimitiveProcedure("print", list =>
 {
     Console.Write(String.Join(" ", list.Select(PrintStr)));
     Console.WriteLine();
-    return null;
+    return Nil;
 }));
+
+// env?
+primitiveOperators.Add("eval", new PrimitiveProcedure("eval", list =>
+{
+    return Eval((JToken)list.First(),_globalEnv);
+}));
+
+
 
 // null? 
 // nil? 
@@ -283,7 +293,10 @@ bool IsOperation(JToken expr, String s)
 bool IsAssignment(JToken expr)
 {
     return IsOperation(expr, "define");
+}
 
+bool IsQuote(JToken expr) {
+    return IsOperation(expr, "quote") || IsOperation(expr, "'");
 }
 
 // progn, begin, clojure: do
@@ -442,6 +455,11 @@ Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
     }
 }
 
+
+Object EvaluateQuote(JToken expr) {
+    return expr.AsJEnumerable().Skip(1).First();
+}
+
 // Metacircular evaluator
 Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
 {
@@ -454,6 +472,9 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
         }
         var o = token.ToObject<Object>();
         return o;
+    }
+    if (IsQuote(expr)) {
+        return EvaluateQuote(expr);
     }
     if (IsNil(expr))
     {
@@ -516,3 +537,4 @@ record Symbol(String name);
 record CompoundProcedure(String name, IJEnumerable<JToken> arglist, IJEnumerable<JToken> body);
 
 record CompoundProcedureGroup(String name, Dictionary<int,CompoundProcedure> procedures);
+
