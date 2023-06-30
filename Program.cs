@@ -3,17 +3,45 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Linq;
+using System.Collections.Immutable;
 
 
-string[] prompts =  {"user> ", "what next?> ", "what is my purpose?> ", "say the next piece of the program> " };
 
-Dictionary<String, Func<List<Object>, Object>> primitiveOperators = new ();
 var random = new Random();
 
-primitiveOperators.Add("+", (args) =>
+string[] prompts = { "user> ", "what next?> ", "what is my purpose?> ", "say the next piece of the program> " };
+
+
+Dictionary<String, PrimitiveProcedure> primitiveOperators = new();
+
+
+Object Nil = new System.Object();
+
+// env
+// { "nil" Nil }
+
+// [ "let", [ "a", 10 ] body]
+// [ [ "lambda", ["a"] body ], 10 ]
+
+// expand environment
+// temp local env
+
+var _globalEnv = ImmutableDictionary<String, Object>.Empty;
+
+string PrintStr(Object o)
+{
+    if (o == Nil)
+    {
+        return "nil";
+    }
+    return o.ToString();
+
+}
+
+primitiveOperators.Add("+", new PrimitiveProcedure("+", (toAdd) =>
 {
     long sum = 0;
-    foreach (var arg in args)
+    foreach (var arg in toAdd)
     {
         if (arg is long)
             sum += (long)arg;
@@ -21,20 +49,43 @@ primitiveOperators.Add("+", (args) =>
             throw new InvalidOperationException($"Expected number, found {arg.GetType()}");
     }
     return sum;
-});
+})
+);
 
-Object Nil = new System.Object();
 
-// env
-// { "nil" Nil }
+primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
+{
+
+    Console.WriteLine("{");
+    foreach (var kvp in _globalEnv)
+    {
+        var s = PrintStr(kvp.Value);
+        Console.WriteLine(kvp.Key + " - " + s);
+    }
+    Console.WriteLine("}");
+    return null;
+}));
+
+foreach (var kvp in primitiveOperators)
+{
+    _globalEnv = _globalEnv.SetItem(kvp.Key, kvp.Value);
+}
+
+
+_globalEnv = _globalEnv.SetItem("nil", Nil);
+
 
 if (args.Length > 0)
-
 {
 
     string json = File.ReadAllText(args[0]);
-    var exp = Read(json);
-    var v = Eval(exp);
+    var expr = Read(json);
+    foreach (var e in expr.AsEnumerable()) {
+        Console.WriteLine(e);
+
+    }
+    
+    var v = Eval(expr, _globalEnv);
     Print(v);
 
 }
@@ -43,48 +94,121 @@ else
 
 {
     Repl();
-    
+
 }
 
-T RandNth<T>(T[] lst) {
-    int seed =  (int)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+T RandNth<T>(T[] lst)
+{
+    int seed = (int)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     int randomIndex = random.Next(0, lst.Count());
     var randomElement = lst[randomIndex];
     return randomElement;
 }
 
-void Repl() {
-    while (true) {
-       var prompt = RandNth(prompts);
-       Console.Write(prompt);
-       var input = Console.ReadLine();
-       var v = Eval(Read(input));
-       Print(v);
+void Repl()
+{
+    while (true)
+    {
+        var prompt = RandNth(prompts);
+        Console.Write(prompt);
+        var input = Console.ReadLine();
+        try
+        {
+            var v = Eval(Read(input), _globalEnv);
+            Print(v);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(e);
+        }
+    }
+}
+
+// Reader
+JToken Read(string expr)
+{
+    try
+    {
+        JToken token = JToken.Parse(expr);
+        return token;
+    }
+    catch (Exception e)
+    {
+        Console.Error.WriteLine("Error reading: " + e.Message);
+        throw;
     }
 }
 
 
-JToken Read(string expr) {
-    JToken token = JToken.Parse(expr);
-    return token;
-}
-
-void Print(Object o) {
-    if (o == Nil) {
+// Printer
+void Print(Object o)
+{
+    if (o == Nil)
+    {
         Console.WriteLine("nil");
-    } else {
+    }
+    else
+    {
         Console.WriteLine(o);
     }
 }
 
+bool IsString(JToken expr)
+{
+    if (expr.Type == JTokenType.String)
+    {
+        var s = expr.ToObject<String>();
+        return s.FirstOrDefault() == '\'';
+    }
+    return false;
+}
 
-bool IsSelfEvaluating(JToken exp) {
-   
-   if (exp.Type == JTokenType.Object)
+
+bool IsSymbol(JToken expr)
+{
+    return expr.Type == JTokenType.String && !IsString(expr);
+}
+
+string SymbolName(JToken expr)
+{
+    if (expr.Type == JTokenType.String)
+    {
+        var s = expr.ToObject<String>();
+        return s;
+    }
+    throw new Exception("not a symbol? " + expr);
+}
+
+string StringValue(JToken expr)
+{
+    if (expr.Type == JTokenType.String)
+    {
+        var s = expr.ToObject<String>();
+        return s;
+        // string substring = s.Substring(1, s.Length - 1);
+        // return substring;
+    }
+    throw new Exception("not a string? " + expr);
+}
+
+bool IsSelfEvaluating(JToken expr)
+{
+
+
+    if (expr.Type == JTokenType.Object)
     {
         return false;
     }
-    else if (exp.Type == JTokenType.Array)
+    else if (expr.Type == JTokenType.Array)
+    {
+        return false;
+    }
+    else if (IsString(expr))
+    {
+        return true;
+    }
+
+    else if (IsSymbol(expr))
     {
         return false;
     }
@@ -96,68 +220,215 @@ bool IsSelfEvaluating(JToken exp) {
     }
 }
 
-bool IsNil(JToken exp) {
-    if (exp.Type == JTokenType.Array) {
-    var objArr = exp.ToObject<JToken[]>();
-    if (objArr.Count() == 0) {
+bool IsNil(JToken expr)
+{
+    if (expr.Type == JTokenType.Array)
+    {
+        var objArr = expr.ToObject<JToken[]>();
+        if (objArr.Count() == 0)
+        {
             return true;
         }
     }
     return false;
 }
- 
-bool TryString(JToken o, out string v) {
-    v = "";
-    if (o.Type == JTokenType.Object) {
-        var objDict = ((JObject)o).ToObject<Dictionary<string, JToken>>();
-        if (objDict.TryGetValue("is", out var isV)) {
-            if (isV.ToObject<String>() == "string")
-            {
-                v = objDict["val"].ToObject<String>();
-                return true;
 
-            }
+bool IsApplication(JToken expr)
+{
+    return expr.Type == JTokenType.Array;
+}
+
+JToken Operator(JToken expr)
+{
+    var objArr = expr.ToObject<JToken[]>();
+    return objArr.First();
+}
+
+List<Object> EvalSequence(IEnumerable<JToken> expr, ImmutableDictionary<String, Object> env)
+{
+    return expr.Select((e) => Eval(e, env)).ToList();
+}
+
+IEnumerable<JToken> Operators(JToken expr)
+{
+    var objArr = expr.ToObject<JToken[]>();
+    return objArr.Skip(1);
+}
+
+bool IsOperation(JToken expr, String s)
+{
+    if (expr.Type == JTokenType.Array)
+    {
+        var objArr = expr.ToObject<JToken[]>();
+        var op = objArr.First();
+        if (op.ToObject<String>() == s)
+        {
+
+            return true;
         }
+
     }
     return false;
 }
 
-bool IsApplication(JToken exp) {
-    return exp.Type == JTokenType.Array;
+bool IsAssignment(JToken expr)
+{
+    return IsOperation(expr, "define");
+
 }
 
-JToken Operator(JToken exp) {
-    var objArr = exp.ToObject<JToken[]>();
-    return objArr.First();
+String DefineVariable(String symbol, Object defVal, ImmutableDictionary<String, Object> env)
+{
+    _globalEnv = _globalEnv.SetItem(symbol, defVal);
+    return symbol;
 }
 
-List<Object> EvalSequence(IEnumerable<JToken> exp) {
-    return exp.Select(Eval).ToList();
+// the "foo" in
+// ["define", "foo", 10]
+String DefinitionVariable(JToken expr)
+{
+    var objArr = expr.ToObject<JToken[]>();
+    var symbolExpr = objArr[1];
+    if (!IsSymbol(symbolExpr))
+    {
+        throw new Exception("Expected symbol: " + symbolExpr);
+    }
+    return symbolExpr.ToObject<String>();
 }
 
-IEnumerable<JToken> Operators(JToken exp) {
-    var objArr = exp.ToObject<JToken[]>();
-    return objArr.Skip(1);
+// the "foo" in
+// ["define", "foo", 10]
+Object DefinitionValue(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    var objArr = expr.ToObject<JToken[]>();
+    var vExpr = objArr[2];
+    return Eval(vExpr, env);
+}
+
+String EvalAssignment(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    return DefineVariable(DefinitionVariable(expr), DefinitionValue(expr, env), env);
+
+}
+
+bool IsVariable(Object o)
+{
+    if (o is JToken jt && IsString(jt))
+    {
+        return false;
+    }
+    else if (o is JToken jt1 && IsSymbol(jt1))
+    {
+        return true;
+    }
+    if (o is String s)
+    {
+        return true;
+    }
+    return false;
+}
+
+Object LookupVariable(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    var s = SymbolName(expr);
+    if (!env.ContainsKey(s)) {
+        throw new Exception("Could not resolve symbol: " + s);
+    }
+    return env[SymbolName(expr)];
+}
+
+bool IsIf(JToken expr)
+{
+    return IsOperation(expr, "if");
+}
+
+bool IsEmpty(Object o)
+{
+    if (o is JToken jt && jt.Type == JTokenType.Array)
+    {
+        var objArr = jt.ToObject<JToken[]>();
+        return objArr.Count() == 0;
+    }
+    else if (o is IEnumerable<Object> e)
+    {
+        return e.Count() == 0;
+    }
+    return false;
+}
+
+bool IsFalsy(Object o)
+{
+    return o == Nil || IsEmpty(o);
 }
 
 
-Object Eval(JToken exp) {
-    if (IsSelfEvaluating(exp)) {
-        var token = (JToken)exp;
+bool IsTruthy(Object o)
+{
+    return !IsFalsy(o);
+}
+
+
+
+// [ "if", "predicate", "consequence", "alternative" ]
+
+Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    var objArr = expr.ToObject<JToken[]>();
+    var predExpr = objArr[1];
+    var consequenceExpr = objArr[2];
+    var alternativeExpr = objArr[3];
+    Console.WriteLine("pred expr: " + predExpr);
+    if (IsTruthy(Eval(predExpr, env)))
+    {
+        Console.WriteLine("yes, truthy");
+        return Eval(consequenceExpr, env);
+    }
+    else
+    {
+        return Eval(alternativeExpr, env);
+    }
+}
+
+// Metacircular evaluator
+Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    if (IsSelfEvaluating(expr))
+    {
+        var token = (JToken)expr;
+        if (IsString(expr))
+        {
+            return StringValue(expr);
+        }
         var o = token.ToObject<Object>();
         return o;
-    } if (IsNil(exp)) {
+    }
+    if (IsNil(expr))
+    {
         return Nil;
-    } if (IsApplication(exp)) {
+        // put those into the env 
+    }
+    if (IsAssignment(expr))
+    {
+        return EvalAssignment(expr, env);
+    }
+    if (IsVariable(expr))
+    {
+        return LookupVariable(expr, env);
+    }
+    if (IsIf(expr))
+    {
+        return EvaluateIf(expr, env);
+    }
+    if (IsApplication(expr))
+    {
         return
-            Apply(Eval(Operator(exp)),
-              EvalSequence(Operators(exp)));
+            Apply(Eval(Operator(expr), env),
+                  EvalSequence(Operators(expr), env),
+                  env);
     }
-    if (TryString(exp, out var s)) {
-        return s;
-    }
-    else {
-        Console.Error.WriteLine("Unknown expression type -- EVAL", exp);
+    else
+    {
+        Console.Error.WriteLine("Unknown expression type -- EVAL", expr);
     }
 
     return null;
@@ -166,17 +437,22 @@ Object Eval(JToken exp) {
 
 
 // evaluated args
-Object Apply(Object procedure, List<Object> arguments) {
-    if (procedure is String proc && primitiveOperators.TryGetValue(proc, out var op)) {
-        return op.Invoke(arguments);
-    } else {
-        throw new Exception("Unknown procedure type -- APPLY " +  procedure);
+Object Apply(Object procedure, List<Object> arguments, ImmutableDictionary<String, Object> env)
+{
+    if (procedure is PrimitiveProcedure proc)
+    {
+        return proc.proc.Invoke(arguments);
+    }
+    else
+    {
+        throw new Exception("Unknown procedure type -- APPLY " + procedure);
     }
 
 }
 
+// env local
+// lambda
 
- 
+record PrimitiveProcedure(String name, Func<List<Object>, Object> proc);
 
-
-
+record Symbol(String name);
