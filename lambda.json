@@ -1,0 +1,1 @@
+["do"   , ["define", "double", ["lambda", ["a", "&rest", "r"], "r" ] ], ["double", 10, 1, 2, 3]]

@@ -5,7 +5,7 @@ var random = new Random();
 
 string[] prompts = { "user> ", "what next?> ", "what is my purpose?> ", "say the next piece of the program> " };
 
-Dictionary<String, PrimitiveProcedure> primitiveOperators = new();
+Dictionary<String, PrimitiveProcedure> primitiveOperands = new();
 
 Object Nil = new System.Object();
 
@@ -35,7 +35,7 @@ string PrintStr(Object o)
     return o.ToString();
 }
 
-primitiveOperators.Add("+", new PrimitiveProcedure("+", (toAdd) =>
+primitiveOperands.Add("+", new PrimitiveProcedure("+", (toAdd) =>
 {
     long sum = 0;
     foreach (var arg in toAdd)
@@ -50,7 +50,7 @@ primitiveOperators.Add("+", new PrimitiveProcedure("+", (toAdd) =>
 );
 
 
-primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
+primitiveOperands.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
 {
 
     Console.WriteLine("{");
@@ -64,7 +64,7 @@ primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
 }));
 
 
-primitiveOperators.Add("print", new PrimitiveProcedure("print", list =>
+primitiveOperands.Add("print", new PrimitiveProcedure("print", list =>
 {
     Console.Write(String.Join(" ", list.Select(PrintStr)));
     Console.WriteLine();
@@ -72,7 +72,7 @@ primitiveOperators.Add("print", new PrimitiveProcedure("print", list =>
 }));
 
 // env?
-primitiveOperators.Add("eval", new PrimitiveProcedure("eval", list =>
+primitiveOperands.Add("eval", new PrimitiveProcedure("eval", list =>
 {
     return Eval((JToken)list.First(), _globalEnv);
 }));
@@ -82,7 +82,7 @@ primitiveOperators.Add("eval", new PrimitiveProcedure("eval", list =>
 // null? 
 // nil? 
 
-foreach (var kvp in primitiveOperators)
+foreach (var kvp in primitiveOperands)
 {
     _globalEnv = _globalEnv.SetItem(kvp.Key, kvp.Value);
 }
@@ -94,6 +94,8 @@ _globalEnv = _globalEnv.SetItem("nil", Nil);
 if (args.Length > 0)
 {
 
+
+    // I want to wrap implicity with do but the commas
     string json = File.ReadAllText(args[0]);
     var expr = Read(json);
     foreach (var e in expr.AsEnumerable())
@@ -265,12 +267,12 @@ JToken Operator(JToken expr)
     return objArr.First();
 }
 
-List<Object> EvalSequence(IEnumerable<JToken> expr, ImmutableDictionary<String, Object> env)
+List<Object> ListOfValues(IEnumerable<JToken> expr, ImmutableDictionary<String, Object> env)
 {
     return expr.Select((e) => Eval(e, env)).ToList();
 }
 
-IEnumerable<JToken> Operators(JToken expr)
+IEnumerable<JToken> Operands(JToken expr)
 {
     var objArr = expr.ToObject<JToken[]>();
     return objArr.Skip(1);
@@ -316,13 +318,26 @@ Object EvalSequencially(JToken expr, ImmutableDictionary<String, Object> env)
     {
         var newEnv = _globalEnv;
         foreach (var kvp in env) {
-            newEnv.SetItem(kvp.Key,kvp.Value);
+            newEnv = newEnv.SetItem(kvp.Key,kvp.Value);
         }
         ret = Eval(e, newEnv);
     }
     return ret;
 
 }
+
+Object EvalSequence(IEnumerable<JToken> expressions, ImmutableDictionary<String, Object> env)
+{
+
+    Object ret = Nil;
+    foreach (var e in expressions)
+    {
+        ret = Eval(e, env);
+    }
+    return ret;
+
+}
+
 
 String DefineVariable(String symbol, Object defVal, ImmutableDictionary<String, Object> env)
 {
@@ -448,16 +463,36 @@ Object EvaluateLambda(JToken expr,  ImmutableDictionary<String, Object> env)
 }
 
 
-// Object ApplyCompountProcedure(CompoundProcedure proc, List<Object> arguments, ImmutableDictionary<String, Object> env) {
+ImmutableDictionary<String, Object> ExpandEnv(ImmutableDictionary<String, Object> env, String k, Object v) {
+    Console.WriteLine("ExpandEnv: " + k + " ( " + k.GetType().Name + ")" + " " + v);
+    return env.SetItem(k,v);
+}
 
-//     // 1. enhance the environment with bindings arglist -> arguements
-//     // local env
+IEnumerable<String> ProcedureParameters(CompoundProcedure proc) {
+    return proc.arglist.AsEnumerable().Select((JToken e) => e.ToObject<String>());
+}
+
+// todo &rest
+
+// 1. enhance the environment with bindings arglist -> arguements
+ImmutableDictionary<String, Object> ExtendEnvironment(
+    IEnumerable<String> parameters,
+    List<Object> arguments,
+    ImmutableDictionary<String, Object> env) {
+    foreach (var pair in parameters.Zip(arguments)) {
+        env = env.Add(pair.First, pair.Second);
+    }
+
+    return env;
+}
 
 
-//     // eval body 1 by 1
-//     // return the lastt
 
-// }
+Object ApplyCompountProcedure(CompoundProcedure proc, List<Object> arguments, ImmutableDictionary<String, Object> env) {
+    // Console.WriteLine(arguments.First());
+    var newEnv = ExtendEnvironment(ProcedureParameters(proc), arguments, env);
+    return EvalSequence(proc.body, newEnv);
+}
 
 
 // [ "if", "predicate", "consequence", "alternative" ]
@@ -483,6 +518,7 @@ Object EvaluateQuote(JToken expr)
 {
     return expr.AsJEnumerable().Skip(1).First();
 }
+
 
 // Metacircular evaluator
 Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
@@ -529,7 +565,7 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
     {
         return
             Apply(Eval(Operator(expr), env),
-                  EvalSequence(Operators(expr), env),
+                  ListOfValues(Operands(expr), env),
                   env);
     }
     else
@@ -548,10 +584,10 @@ Object Apply(Object procedure, List<Object> arguments, ImmutableDictionary<Strin
     {
         return proc.proc.Invoke(arguments);
     }
-    // if (procedure is CompoundProcedure cproc) {
+    if (procedure is CompoundProcedure cproc) {
 
-
-    // }
+        return ApplyCompountProcedure(cproc, arguments, env);
+    }
     else
     {
         throw new Exception("Unknown procedure type -- APPLY " + procedure);
