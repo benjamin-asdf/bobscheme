@@ -18,10 +18,24 @@ Object Nil = new System.Object();
 // expand environment
 // temp local env
 
-// begin
-// form1
+// let
 
 var _globalEnv = ImmutableDictionary<String, Object>.Empty;
+
+
+bool IsThunk(Object o)
+{
+    return o is Func<Object>;
+}
+
+Object Trampoline(Object k)
+{
+    while (IsThunk(k))
+    {
+        k = ((Func<Object>)k)();
+    }
+    return k;
+}
 
 string PrintStr(Object o)
 {
@@ -29,9 +43,14 @@ string PrintStr(Object o)
     {
         return "nil";
     }
-    // if (o is IEnumerable<JToken> e) {
-    //     return (new JArray(e.ToArray())).ToString();
-    // }
+    if (o is IJEnumerable<JToken> je)
+    {
+        return o.ToString();
+    }
+    if (o is IEnumerable<Object> oe)
+    {
+        return String.Join(" ", oe.Select(PrintStr));
+    }
     return o.ToString();
 }
 
@@ -46,6 +65,33 @@ primitiveOperands.Add("+", new PrimitiveProcedure("+", (toAdd) =>
             throw new InvalidOperationException($"Expected number, found {arg.GetType()}");
     }
     return sum;
+})
+);
+
+primitiveOperands.Add("-", new PrimitiveProcedure("-", (toSubtract) =>
+{
+    if (toSubtract.Count == 0) throw new InvalidOperationException("No arguments supplied to '-'");
+
+    long substractionResult = 0;
+    bool isFirst = true;
+    foreach (var arg in toSubtract)
+    {
+        if (arg is long)
+        {
+            if (isFirst)
+            {
+                substractionResult = (long)arg;
+                isFirst = false;
+            }
+            else
+            {
+                substractionResult -= (long)arg;
+            }
+        }
+        else
+            throw new InvalidOperationException($"Expected number, found {arg.GetType()}");
+    }
+    return substractionResult;
 })
 );
 
@@ -66,8 +112,7 @@ primitiveOperands.Add("printEnv", new PrimitiveProcedure("printEnv", list =>
 
 primitiveOperands.Add("print", new PrimitiveProcedure("print", list =>
 {
-    Console.Write(String.Join(" ", list.Select(PrintStr)));
-    Console.WriteLine();
+    Console.WriteLine(PrintStr(list));
     return Nil;
 }));
 
@@ -75,6 +120,13 @@ primitiveOperands.Add("print", new PrimitiveProcedure("print", list =>
 primitiveOperands.Add("eval", new PrimitiveProcedure("eval", list =>
 {
     return Eval((JToken)list.First(), _globalEnv);
+}));
+
+
+primitiveOperands.Add("=", new PrimitiveProcedure("=", list =>
+{
+    var first = list.First();
+    return list.Skip(1).All(v => Equals(first, v));
 }));
 
 
@@ -91,25 +143,19 @@ foreach (var kvp in primitiveOperands)
 _globalEnv = _globalEnv.SetItem("nil", Nil);
 
 
-if (args.Length > 0)
+var files = args.Where(f => f != "--repl");
+var doRepl = args.Contains("--repl");
+
+foreach (var file in files)
 {
-
-
     // I want to wrap implicity with do but the commas
-    string json = File.ReadAllText(args[0]);
+    string json = File.ReadAllText(file);
     var expr = Read(json);
-    foreach (var e in expr.AsEnumerable())
-    {
-        Console.WriteLine(e);
-
-    }
-
     var v = Eval(expr, _globalEnv);
     Print(v);
-
 }
 
-else
+if (doRepl)
 
 {
     Repl();
@@ -310,31 +356,21 @@ bool IsDo(JToken expr)
     return IsOperation(expr, "do");
 }
 
-Object EvalSequencially(JToken expr, ImmutableDictionary<String, Object> env)
-{
-
-    Object ret = Nil;
-    foreach (var e in expr.Skip(1).ToArray())
-    {
-        var newEnv = _globalEnv;
-        foreach (var kvp in env) {
-            newEnv = newEnv.SetItem(kvp.Key,kvp.Value);
-        }
-        ret = Eval(e, newEnv);
-    }
-    return ret;
-
-}
-
 Object EvalSequence(IEnumerable<JToken> expressions, ImmutableDictionary<String, Object> env)
 {
-
-    Object ret = Nil;
-    foreach (var e in expressions)
+    if (expressions.Count() == 0)
     {
-        ret = Eval(e, env);
+        return Nil;
     }
-    return ret;
+
+    List<JToken> seq = expressions.ToList();
+    int count = seq.Count;
+
+    for (int i = 0; i < count - 1; i++)
+    {
+        Eval(seq[i], env);
+    }
+    return () => Eval(seq[count - 1], env);
 
 }
 
@@ -427,7 +463,7 @@ bool IsFalsy(Object o)
 
 bool IsTruthy(Object o)
 {
-    return !IsFalsy(o);
+    return o is Boolean b && b == true || !IsFalsy(o);
 }
 
 bool IsLambda(JToken expr)
@@ -453,7 +489,7 @@ IJEnumerable<JToken> LambdaBody(JToken expr)
     return expr.AsJEnumerable().Skip(2).AsJEnumerable();
 }
 
-Object EvaluateLambda(JToken expr,  ImmutableDictionary<String, Object> env)
+Object EvaluateLambda(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var arglist = LambdaArglist(expr);
     var name = "anonymous-procedure" + "<" + arglist.Count() + ">";
@@ -463,12 +499,13 @@ Object EvaluateLambda(JToken expr,  ImmutableDictionary<String, Object> env)
 }
 
 
-ImmutableDictionary<String, Object> ExpandEnv(ImmutableDictionary<String, Object> env, String k, Object v) {
-    Console.WriteLine("ExpandEnv: " + k + " ( " + k.GetType().Name + ")" + " " + v);
-    return env.SetItem(k,v);
+ImmutableDictionary<String, Object> ExpandEnv(ImmutableDictionary<String, Object> env, String k, Object v)
+{
+    return env.SetItem(k, v);
 }
 
-IEnumerable<String> ProcedureParameters(CompoundProcedure proc) {
+IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
+{
     return proc.arglist.AsEnumerable().Select((JToken e) => e.ToObject<String>());
 }
 
@@ -478,19 +515,24 @@ IEnumerable<String> ProcedureParameters(CompoundProcedure proc) {
 ImmutableDictionary<String, Object> ExtendEnvironment(
     IEnumerable<String> parameters,
     List<Object> arguments,
-    ImmutableDictionary<String, Object> env) {
-    foreach (var pair in parameters.Zip(arguments)) {
-        env = env.Add(pair.First, pair.Second);
+    ImmutableDictionary<String, Object> env)
+{
+    foreach (var pair in parameters.Zip(arguments))
+    {
+        env = ExpandEnv(env, pair.First, pair.Second);
     }
-
     return env;
 }
 
-
-
-Object ApplyCompountProcedure(CompoundProcedure proc, List<Object> arguments, ImmutableDictionary<String, Object> env) {
+Object ApplyCompountProcedure(CompoundProcedure proc, List<Object> arguments, ImmutableDictionary<String, Object> env)
+{
     // Console.WriteLine(arguments.First());
-    var newEnv = ExtendEnvironment(ProcedureParameters(proc), arguments, env);
+    var parameters = ProcedureParameters(proc);
+    if (parameters.Count() != arguments.Count())
+    {
+        throw new Exception("Wrong number of arguments. you said " + arguments.Count + " but " + proc.name + " wants " + parameters.Count());
+    }
+    var newEnv = ExtendEnvironment(parameters, arguments, env);
     return EvalSequence(proc.body, newEnv);
 }
 
@@ -505,11 +547,11 @@ Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
     var alternativeExpr = objArr[3];
     if (IsTruthy(Eval(predExpr, env)))
     {
-        return Eval(consequenceExpr, env);
+        return () => Eval(consequenceExpr, env);
     }
     else
     {
-        return Eval(alternativeExpr, env);
+        return () => Eval(alternativeExpr, env);
     }
 }
 
@@ -545,10 +587,11 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
     {
         return EvalAssignment(expr, env);
     }
-    if (IsDo(expr)) {
-        return EvalSequencially(expr, env);
+    if (IsDo(expr))
+    {
+        return EvalSequence(expr, env);
+
     }
-         
     if (IsVariable(expr))
     {
         return LookupVariable(expr, env);
@@ -559,14 +602,16 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
     }
     if (IsLambda(expr))
     {
-        return EvaluateLambda(expr,env);
+        return EvaluateLambda(expr, env);
     }
     if (IsApplication(expr))
     {
         return
+            Trampoline(
             Apply(Eval(Operator(expr), env),
                   ListOfValues(Operands(expr), env),
-                  env);
+                  env));
+
     }
     else
     {
@@ -584,8 +629,8 @@ Object Apply(Object procedure, List<Object> arguments, ImmutableDictionary<Strin
     {
         return proc.proc.Invoke(arguments);
     }
-    if (procedure is CompoundProcedure cproc) {
-
+    if (procedure is CompoundProcedure cproc)
+    {
         return ApplyCompountProcedure(cproc, arguments, env);
     }
     else
