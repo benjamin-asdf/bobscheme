@@ -1,0 +1,1 @@
+["define", "foo1", ["let", ["a", 10], ["lambda", [], "a"]]]

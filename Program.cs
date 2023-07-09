@@ -14,7 +14,6 @@ Object Nil = new System.Object();
 // { "nil" Nil }
 
 // [ "let", [ "a", 10 ] body]
-// [ [ "lambda", ["a"] body ], 10 ]
 
 // expand environment
 // temp local env
@@ -58,6 +57,19 @@ string PrintStr(Object o)
     }
     return o.ToString();
 }
+
+static ImmutableDictionary<K,V> Merge<K, V>(params IDictionary<K, V>[] dictionaries)
+{
+    var m = ImmutableDictionary<K, V>.Empty;
+    foreach (var dict in dictionaries) {
+        foreach (var kvp in dict) {
+            m = m.SetItem(kvp.Key, kvp.Value);
+        }
+    }
+    return m;
+
+}
+
 
 // todo: with-meta
 // meta
@@ -263,6 +275,9 @@ JToken Read(string expr)
     }
     catch (Exception e)
     {
+        if (e is Newtonsoft.Json.JsonReaderException) {
+           Console.Error.WriteLine("DID YOU FORGET A COMMA?");
+        }
         Console.Error.WriteLine("Error reading: " + e.Message);
         throw;
     }
@@ -590,7 +605,8 @@ Object ApplyCompountProcedure(CompoundProcedure proc, List<Object> arguments, Im
     {
         throw new Exception("Wrong number of arguments. you said " + arguments.Count + " but " + proc.name + " wants " + parameters.Count());
     }
-    var newEnv = ExtendEnvironment(parameters, arguments, env);
+    var newEnv1 = Merge(env, proc.env);
+    var newEnv = ExtendEnvironment(parameters, arguments, newEnv1);
     return EvalSequence(proc.body, newEnv);
 }
 
@@ -678,6 +694,43 @@ JToken macroexpand(JToken expr) {
 }
 
 
+// ["let" ["a" 10 "b" ["+" "a" "a"]]]
+// eval first, second etc.
+
+
+bool IsLet(JToken expr) {
+    return IsOperation(expr,"let");
+}
+
+// first build local env
+// eval the body
+
+Object EvalLet(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    var letExpr = expr.Skip(1);
+    var bindings = letExpr.First().ToObject<JArray>();
+    var localEnv = env;
+
+    for (int i = 0; i < bindings.Count(); i += 2)
+    {
+        var nameExpr = bindings[i];
+        var valueExpr = bindings[i + 1];
+
+        if (!IsSymbol(nameExpr)) {
+            throw new Exception("Expected symbol for binding name in let: " + nameExpr);
+        }
+
+        var name = nameExpr.ToObject<String>();
+        var v = Eval(valueExpr, localEnv);
+        localEnv = ExpandEnv(localEnv,name,v);
+        
+    }
+
+    var bodyExpressions = letExpr.Skip(1);
+    return EvalSequence(bodyExpressions, localEnv);
+}
+
+
 // Metacircular evaluator
 Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
 
@@ -728,6 +781,10 @@ Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
     {
         return EvaluateMacro(expr, env);
     }
+    if (IsLet(expr)) {
+        return EvalLet(expr,env);
+    }
+
     if (IsApplication(expr))
     {
         var op = Eval(Operator(expr), env);
