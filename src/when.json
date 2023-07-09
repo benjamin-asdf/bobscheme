@@ -1,0 +1,2 @@
+["define", "when", ["create-macro", ["lambda", ["pred", "consequence"],
+                                     ["list", ["quote", "if"], "pred", "consequence", "nil"]]]]

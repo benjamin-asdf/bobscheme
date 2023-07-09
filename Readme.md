@@ -10,6 +10,16 @@ A scheme using json data as code, implemented in C#.
 
 is the symbol `foo`.
 
+# tailr recursive fib
+
+```sh
+dotnet run src/fib-iter.json src/fib.json src/call-fib.json
+fib-iter
+fib-tail-rec
+55
+```
+
+
 # Chat GPT examples
 
 Here are some sample BobScheme code snippets in the form of JSON:
@@ -35,4 +45,3 @@ Here are some sample BobScheme code snippets in the form of JSON:
 ["sum-of-squares", 3, 4]
 ```
 
-Please keep in mind that this is just an example of BobScheme code and may need to be adjusted according to your specific interpreter or syntax requirements.
