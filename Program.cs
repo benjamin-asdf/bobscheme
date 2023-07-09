@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Immutable;
+using bobscheme;
 
 var random = new Random();
 
@@ -37,6 +38,15 @@ Object Trampoline(Object k)
     return k;
 }
 
+IImmutableDictionary<string, Object> meta(Object o)
+{
+    if (o is IMeta m)
+    {
+        return m.meta();
+    }
+    return null;
+}
+
 string PrintStr(Object o)
 {
     if (o == Nil)
@@ -53,6 +63,9 @@ string PrintStr(Object o)
     }
     return o.ToString();
 }
+
+// todo: with-meta
+// meta
 
 primitiveOperands.Add("+", new PrimitiveProcedure("+", (toAdd) =>
 {
@@ -426,6 +439,18 @@ bool IsVariable(Object o)
     return false;
 }
 
+
+Object LookupVariableSoft(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    var s = SymbolName(expr);
+    if (!env.ContainsKey(s))
+    {
+        return null;
+    }
+    return env[SymbolName(expr)];
+}
+
+
 Object LookupVariable(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var s = SymbolName(expr);
@@ -489,13 +514,12 @@ IJEnumerable<JToken> LambdaBody(JToken expr)
     return expr.AsJEnumerable().Skip(2).AsJEnumerable();
 }
 
-Object EvaluateLambda(JToken expr, ImmutableDictionary<String, Object> env)
+CompoundProcedure EvaluateLambda(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var arglist = LambdaArglist(expr);
     var name = "anonymous-procedure" + "<" + arglist.Count() + ">";
     var body = LambdaBody(expr);
-    return new CompoundProcedure(name, arglist, body, env);
-    // return new CompoundProcedureGroup("anon");
+    return new CompoundProcedure(name, arglist, body, env, ImmutableDictionary<String, Object>.Empty);
 }
 
 
@@ -561,10 +585,72 @@ Object EvaluateQuote(JToken expr)
     return expr.AsJEnumerable().Skip(1).First();
 }
 
+bool IsMacroCreation(JToken expr)
+{
+    return IsOperation(expr, "create-macro");
+}
+
+Object EvaluateMacro(JToken expr, ImmutableDictionary<String, Object> env)
+{
+    CompoundProcedure proc = EvaluateLambda(expr.Skip(1).First(), env);
+    var newMeta = meta(proc);
+    newMeta = newMeta.SetItem("macro?", true);
+    var macro = proc.withMeta(newMeta);
+    return macro;
+}
+
+bool IsMacro(Object o) {
+    if (o is IMeta m) {
+        return m.meta().GetValueOrDefault("macro?") is Boolean b && b == true;
+    }
+    return false;
+}
+
+// macroexpand
+// - if macro, appll macro
+//   else return expr
+
+
+JToken macroexpand1(JToken expr) {
+    Console.WriteLine("macroexpand1");
+
+    Console.WriteLine(expr);
+    if (!IsApplication(expr)) {
+        return expr;
+    }
+    var op1 = Operator(expr);
+    if (!IsSymbol(op1)) {
+        return expr;
+    }
+    var op = LookupVariableSoft(op1,_globalEnv);
+    if (op ==  null) {
+        return expr;
+    }
+    if (!IsMacro(op)) {
+        return expr;
+    }
+   
+    var listOfExpr = Operands(expr);
+    return (JToken)Trampoline(Apply(op, listOfExpr.Select(o => (Object) o).ToList(), _globalEnv));
+}
+
+JToken macroexpand(JToken expr) {
+    JToken exf = macroexpand1(expr);
+	if(exf != expr) {
+            return macroexpand(exf);
+        }
+    return expr;
+}
 
 // Metacircular evaluator
 Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
 {
+    Console.WriteLine("eval");
+    Console.WriteLine(expr);
+
+    
+    expr = macroexpand(expr);
+
     if (IsSelfEvaluating(expr))
     {
         var token = (JToken)expr;
@@ -604,13 +690,15 @@ Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
     {
         return EvaluateLambda(expr, env);
     }
+    if (IsMacroCreation(expr))
+    {
+        return EvaluateMacro(expr, env);
+    }
     if (IsApplication(expr))
     {
+        var op = Eval(Operator(expr), env);
         return
-            Trampoline(
-            Apply(Eval(Operator(expr), env),
-                  ListOfValues(Operands(expr), env),
-                  env));
+            Trampoline(Apply(op, ListOfValues(Operands(expr), env), env));
 
     }
     else
@@ -647,8 +735,23 @@ record PrimitiveProcedure(String name, Func<List<Object>, Object> proc);
 
 record Symbol(String name);
 
-record CompoundProcedure(String name, IJEnumerable<JToken> arglist, IJEnumerable<JToken> body,
-                         ImmutableDictionary<String, Object> env);
+record CompoundProcedure(String name,
+    IJEnumerable<JToken> arglist,
+    IJEnumerable<JToken> body,
+                        ImmutableDictionary<String, Object> env,
+    IImmutableDictionary<string, Object> _meta) : IObj
+{
+
+    public IImmutableDictionary<string, object> meta()
+    {
+        return this._meta;
+    }
+
+    public IObj withMeta(IImmutableDictionary<string, object> meta)
+    {
+        return new CompoundProcedure(name, arglist, body, env, meta);
+    }
+}
 
 record CompoundProcedureGroup(String name, Dictionary<int, CompoundProcedure> procedures);
 
