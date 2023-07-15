@@ -251,7 +251,7 @@ foreach (var file in files)
     Print(v);
 }
 
-StartWebSocketServer();
+// StartWebSocketServer();
 
 
 if (doRepl)
