@@ -1,0 +1,2 @@
+["define", "my-atom", ["atom" , 10]]
+;; ["swap!", "my-atom", ["lambda", ["v"], ["+", 1, "v"]]]
