@@ -1,26 +1,53 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Collections.Immutable;
-using bobscheme;
 using clojure.AtomRef;
-// using WebSocketSharp;
-// using WebSocketSharp.Server;
+using Newtonsoft.Json.Linq;
+using System.Collections.Immutable;
+using bobscheme.csharp.Bobscheme.Lang;
 
-var random = new Random();
 
-string[] prompts = { "user> ", "what next?> ", "what is my purpose?> ", "say the next piece of the program> " };
+namespace Bobscheme.Lang.RT;
 
-Dictionary<String, PrimitiveProcedure> primitiveOperators = new();
 
-Object Nil = new System.Object();
+public  record PrimitiveProcedure(String name, Func<ImmutableDictionary<String, Object>, IEnumerable<Object>, Object> proc);
 
-var _globalEnv = ImmutableDictionary<String, Object>.Empty;
+public  record Symbol(String name);
 
-bool IsThunk(Object o)
+public  record CompoundProcedure(String name,
+    IJEnumerable<JToken> arglist,
+    IJEnumerable<JToken> body,
+                         ImmutableDictionary<String, Object> env,
+    IImmutableDictionary<string, Object> _meta) : IObj
+{
+
+    public IImmutableDictionary<string, object> meta()
+    {
+        return this._meta;
+    }
+
+    public IObj withMeta(IImmutableDictionary<string, object> meta)
+    {
+        return new CompoundProcedure(name, arglist, body, env, meta);
+    }
+}
+
+public record CompoundProcedureGroup(String name, Dictionary<int, CompoundProcedure> procedures);
+
+
+public static class RT{
+
+public static Random random = new Random();
+
+public static Dictionary<String, PrimitiveProcedure> primitiveOperators = new();
+
+public static  Object Nil = new System.Object();
+
+public static IEnv<String, Object> _globalEnv = new ImmutableEnv(ImmutableDictionary<string, object>.Empty);
+
+static bool IsThunk(Object o)
 {
     return o is Func<Object>;
 }
 
-Object Trampoline(Object k)
+static  Object Trampoline(Object k)
 {
     while (IsThunk(k))
     {
@@ -29,7 +56,7 @@ Object Trampoline(Object k)
     return k;
 }
 
-IImmutableDictionary<string, Object> meta(Object o)
+public  static  IImmutableDictionary<string, Object> meta(Object o)
 {
     if (o is IMeta m)
     {
@@ -38,7 +65,7 @@ IImmutableDictionary<string, Object> meta(Object o)
     return null;
 }
 
-string PrintStr(Object o)
+public  static string PrintStr(Object o)
 {
     if (o == Nil)
     {
@@ -47,6 +74,10 @@ string PrintStr(Object o)
     if (o is IJEnumerable<JToken> je)
     {
         return o.ToString();
+    }
+    if (o is IPrintable printable)
+    {
+        return printable.PrintStr();
     }
     return o.ToString();
 }
@@ -65,10 +96,9 @@ static ImmutableDictionary<K, V> Merge<K, V>(params IDictionary<K, V>[] dictiona
 
 }
 
-
-// todo: with-meta
-// meta
-
+static RT()
+{
+    
 primitiveOperators.Add("+", new PrimitiveProcedure("+", (env, toAdd) =>
 {
     long sum = 0;
@@ -113,14 +143,7 @@ primitiveOperators.Add("-", new PrimitiveProcedure("-", (env, list) => {
 
 primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", (env, list) =>
 {
-
-    Console.WriteLine("{");
-    foreach (var kvp in _globalEnv)
-    {
-        var s = PrintStr(kvp.Value);
-        Console.WriteLine(kvp.Key + " - " + s);
-    }
-    Console.WriteLine("}");
+    Print(_globalEnv); 
     return Nil;
 }));
 
@@ -226,74 +249,27 @@ primitiveOperators.Add("macroexpand1", new PrimitiveProcedure("macroexpand1", (e
 
 }));
 
-
-
 // null? 
 // nil? 
 
 foreach (var kvp in primitiveOperators)
 {
-    _globalEnv = _globalEnv.SetItem(kvp.Key, kvp.Value);
+    _globalEnv = _globalEnv.Extend(kvp.Key, kvp.Value);;
+}
+_globalEnv = _globalEnv.Extend("nil", Nil);;
+    
+    
 }
 
 
-_globalEnv = _globalEnv.SetItem("nil", Nil);
-
-var files = args.Where(f => f != "--repl");
-var doRepl = args.Contains("--repl");
-
-foreach (var file in files)
-{
-    // I want to wrap implicity with do but the commas
-    string json = File.ReadAllText(file);
-    var expr = Read(json);
-    var v = Eval(expr, _globalEnv);
-    Print(v);
-}
-
-// StartWebSocketServer();
 
 
-if (doRepl)
+// todo: with-meta
+// meta
 
-{
-    Repl();
-
-}
-
-T RandNth<T>(T[] lst)
-{
-    int seed = (int)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    int randomIndex = random.Next(0, lst.Count());
-    var randomElement = lst[randomIndex];
-    return randomElement;
-}
-
-void Repl()
-{
-    while (true)
-    {
-        var prompt = RandNth(prompts);
-        Console.Write(prompt);
-        var input = Console.ReadLine();
-        try
-        {
-            if (input != "")
-            {
-                var v = Eval(Read(input), _globalEnv);
-                Print(v);
-            }
-
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine(e);
-        }
-    }
-}
 
 // Reader
-JToken Read(string expr)
+public static JToken Read(string expr)
 {
     try
     {
@@ -311,7 +287,7 @@ JToken Read(string expr)
     }
 }
 
-bool IsString(JToken expr)
+public static bool IsString(JToken expr)
 {
     if (expr.Type == JTokenType.String)
     {
@@ -322,12 +298,12 @@ bool IsString(JToken expr)
 }
 
 
-bool IsSymbol(JToken expr)
+public static bool IsSymbol(JToken expr)
 {
     return expr.Type == JTokenType.String && !IsString(expr);
 }
 
-string SymbolName(JToken expr)
+public static string SymbolName(JToken expr)
 {
     if (expr.Type == JTokenType.String)
     {
@@ -337,7 +313,7 @@ string SymbolName(JToken expr)
     throw new Exception("not a symbol? " + expr);
 }
 
-string StringValue(JToken expr)
+public static string StringValue(JToken expr)
 {
     if (expr.Type == JTokenType.String)
     {
@@ -349,7 +325,7 @@ string StringValue(JToken expr)
     throw new Exception("not a string? " + expr);
 }
 
-bool IsSelfEvaluating(JToken expr)
+public static bool IsSelfEvaluating(JToken expr)
 {
 
     if (expr.Type == JTokenType.Object)
@@ -377,7 +353,7 @@ bool IsSelfEvaluating(JToken expr)
     }
 }
 
-bool IsNil(JToken expr)
+public static bool IsNil(JToken expr)
 {
     if (expr.Type == JTokenType.Array)
     {
@@ -395,29 +371,29 @@ bool IsNil(JToken expr)
     return false;
 }
 
-bool IsApplication(JToken expr)
+public static bool IsApplication(JToken expr)
 {
     return expr.Type == JTokenType.Array;
 }
 
-JToken Operator(JToken expr)
+public static JToken Operator(JToken expr)
 {
     var objArr = expr.ToObject<JToken[]>();
     return objArr.First();
 }
 
-List<Object> ListOfValues(IEnumerable<JToken> expr, ImmutableDictionary<String, Object> env)
+public static List<Object> ListOfValues(IEnumerable<JToken> expr, ImmutableDictionary<String, Object> env)
 {
     return expr.Select((e) => Eval(e, env)).ToList();
 }
 
-IEnumerable<JToken> Operands(JToken expr)
+public static IEnumerable<JToken> Operands(JToken expr)
 {
     var objArr = expr.ToObject<JToken[]>();
     return objArr.Skip(1);
 }
 
-bool IsOperation(JToken expr, String s)
+public static bool IsOperation(JToken expr, String s)
 {
     if (expr.Type == JTokenType.Array)
     {
@@ -433,23 +409,23 @@ bool IsOperation(JToken expr, String s)
     return false;
 }
 
-bool IsAssignment(JToken expr)
+public static bool IsAssignment(JToken expr)
 {
     return IsOperation(expr, "define");
 }
 
-bool IsQuote(JToken expr)
+public static bool IsQuote(JToken expr)
 {
     return IsOperation(expr, "quote") || IsOperation(expr, "'");
 }
 
 // progn, begin, clojure: do
-bool IsDo(JToken expr)
+public static bool IsDo(JToken expr)
 {
     return IsOperation(expr, "do");
 }
 
-Object EvalSequence(IEnumerable<JToken> expressions, ImmutableDictionary<String, Object> env)
+public static Object EvalSequence(IEnumerable<JToken> expressions, ImmutableDictionary<String, Object> env)
 {
     if (expressions.Count() == 0)
     {
@@ -467,15 +443,15 @@ Object EvalSequence(IEnumerable<JToken> expressions, ImmutableDictionary<String,
 
 }
 
-String DefineVariable(String symbol, Object defVal)
+public static String DefineVariable(String symbol, Object defVal)
 {
-    _globalEnv = _globalEnv.SetItem(symbol, defVal);
+    _globalEnv = _globalEnv.Extend(symbol, defVal);
     return symbol;
 }
 
 // the "foo" in
 // ["define", "foo", 10]
-String DefinitionVariable(JToken expr)
+public static String DefinitionVariable(JToken expr)
 {
     var objArr = expr.ToObject<JToken[]>();
     var symbolExpr = objArr[1];
@@ -488,20 +464,20 @@ String DefinitionVariable(JToken expr)
 
 // the 10 in
 // ["define", "foo", 10]
-Object DefinitionValue(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object DefinitionValue(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var objArr = expr.ToObject<JToken[]>();
     var vExpr = objArr[2];
     return Eval(vExpr, env);
 }
 
-String EvalAssignment(JToken expr, ImmutableDictionary<String, Object> env)
+public static String EvalAssignment(JToken expr, ImmutableDictionary<String, Object> env)
 {
     return DefineVariable(DefinitionVariable(expr), DefinitionValue(expr, env));
 
 }
 
-bool IsVariable(Object o)
+public static bool IsVariable(Object o)
 {
     if (o is JToken jt && IsString(jt))
     {
@@ -518,17 +494,7 @@ bool IsVariable(Object o)
     return false;
 }
 
-Object LookupVariableSoft(JToken expr, ImmutableDictionary<String, Object> env)
-{
-    var s = SymbolName(expr);
-    if (!env.ContainsKey(s))
-    {
-        return null;
-    }
-    return env[SymbolName(expr)];
-}
-
-Object LookupVariable(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object LookupVariable(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var s = SymbolName(expr);
     if (!env.ContainsKey(s))
@@ -538,12 +504,12 @@ Object LookupVariable(JToken expr, ImmutableDictionary<String, Object> env)
     return env[SymbolName(expr)];
 }
 
-bool IsIf(JToken expr)
+public static bool IsIf(JToken expr)
 {
     return IsOperation(expr, "if");
 }
 
-bool IsEmpty(Object o)
+public static bool IsEmpty(Object o)
 {
     if (o is JToken jt && jt.Type == JTokenType.Array)
     {
@@ -557,18 +523,18 @@ bool IsEmpty(Object o)
     return false;
 }
 
-bool IsFalsy(Object o)
+public static bool IsFalsy(Object o)
 {
     return o is Boolean b && b == false || o == Nil || IsEmpty(o);
 }
 
 
-bool IsTruthy(Object o)
+public static bool IsTruthy(Object o)
 {
     return o is Boolean b && b == true || !IsFalsy(o);
 }
 
-bool IsLambda(JToken expr)
+public static bool IsLambda(JToken expr)
 {
     return IsOperation(expr, "lambda");
 }
@@ -581,17 +547,17 @@ bool IsLambda(JToken expr)
 // [ "lambda", ["a", "&", "b"]]
 
 
-IJEnumerable<JToken> LambdaArglist(JToken expr)
+public static IJEnumerable<JToken> LambdaArglist(JToken expr)
 {
     return expr.AsJEnumerable().Skip(1).First().AsJEnumerable();
 }
 
-IJEnumerable<JToken> LambdaBody(JToken expr)
+public static IJEnumerable<JToken> LambdaBody(JToken expr)
 {
     return expr.AsJEnumerable().Skip(2).AsJEnumerable();
 }
 
-CompoundProcedure EvaluateLambda(JToken expr, ImmutableDictionary<String, Object> env)
+public static CompoundProcedure EvaluateLambda(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var arglist = LambdaArglist(expr);
     var name = "anonymous-procedure" + "<" + arglist.Count() + ">";
@@ -600,12 +566,12 @@ CompoundProcedure EvaluateLambda(JToken expr, ImmutableDictionary<String, Object
 }
 
 
-ImmutableDictionary<String, Object> ExpandEnv(ImmutableDictionary<String, Object> env, String k, Object v)
+public static ImmutableDictionary<String, Object> ExpandEnv(ImmutableDictionary<String, Object> env, String k, Object v)
 {
     return env.SetItem(k, v);
 }
 
-IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
+public static IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
 {
     return proc.arglist.AsEnumerable().Select((JToken e) => e.ToObject<String>());
 }
@@ -613,7 +579,7 @@ IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
 // todo &rest
 
 // 1. enhance the environment with bindings arglist -> arguements
-ImmutableDictionary<String, Object> ExtendEnvironment(
+public static ImmutableDictionary<String, Object> ExtendEnvironment(
     IEnumerable<String> parameters,
     IEnumerable<Object> arguments,
     ImmutableDictionary<String, Object> env)
@@ -625,7 +591,7 @@ ImmutableDictionary<String, Object> ExtendEnvironment(
     return env;
 }
 
-Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> arguments, ImmutableDictionary<String, Object> env)
+public static Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> arguments, ImmutableDictionary<String, Object> env)
 {
     var parameters = ProcedureParameters(proc);
     if (parameters.Count() != arguments.Count())
@@ -640,7 +606,7 @@ Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> argume
 
 // [ "if", "predicate", "consequence", "alternative" ]
 
-Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
 {
 
     var objArr = expr.ToObject<JToken[]>();
@@ -662,17 +628,17 @@ Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
 }
 
 
-Object EvaluateQuote(JToken expr)
+public static Object EvaluateQuote(JToken expr)
 {
     return expr.AsJEnumerable().Skip(1).First();
 }
 
-bool IsMacroCreation(JToken expr)
+public static bool IsMacroCreation(JToken expr)
 {
     return IsOperation(expr, "create-macro");
 }
 
-Object EvaluateMacro(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object EvaluateMacro(JToken expr, ImmutableDictionary<String, Object> env)
 {
     CompoundProcedure proc = EvaluateLambda(expr.Skip(1).First(), env);
     var newMeta = meta(proc);
@@ -681,7 +647,7 @@ Object EvaluateMacro(JToken expr, ImmutableDictionary<String, Object> env)
     return macro;
 }
 
-bool IsMacro(Object o)
+public static bool IsMacro(Object o)
 {
     if (o is IMeta m)
     {
@@ -694,7 +660,7 @@ bool IsMacro(Object o)
 // - if macro, apply macro
 //   else return expr
 
-JToken macroexpand1(JToken expr)
+public static JToken macroexpand1(JToken expr)
 {
     if (!IsApplication(expr))
     {
@@ -705,8 +671,9 @@ JToken macroexpand1(JToken expr)
     {
         return expr;
     }
-    var op = LookupVariableSoft(op1, _globalEnv);
-    if (op == null)
+
+    var opSymbol = SymbolName(op1);
+    if (_globalEnv.TryLookupVariable(opSymbol, out var op))
     {
         return expr;
     }
@@ -719,7 +686,7 @@ JToken macroexpand1(JToken expr)
     return (JToken)Trampoline(Apply(op, listOfExpr.Select(o => (Object)o).ToList(), _globalEnv));
 }
 
-JToken macroexpand(JToken expr)
+public static JToken macroexpand(JToken expr)
 {
     JToken exf = macroexpand1(expr);
     if (exf != expr)
@@ -734,7 +701,7 @@ JToken macroexpand(JToken expr)
 // eval first, second etc.
 
 
-bool IsLet(JToken expr)
+public static bool IsLet(JToken expr)
 {
     return IsOperation(expr, "let");
 }
@@ -742,7 +709,7 @@ bool IsLet(JToken expr)
 // first build local env
 // eval the body
 
-Object EvalLet(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object EvalLet(JToken expr, ImmutableDictionary<String, Object> env)
 {
     var letExpr = expr.Skip(1);
     var bindings = letExpr.First().ToObject<JArray>();
@@ -770,7 +737,7 @@ Object EvalLet(JToken expr, ImmutableDictionary<String, Object> env)
 
 
 // Metacircular evaluator
-Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
 
 {
 
@@ -837,14 +804,14 @@ Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
     return null;
 }
 
-Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
 {
     return Trampoline(Eval1(expr, env));
 }
 
 
 // evaluated args
-Object Apply(Object procedure, IEnumerable<Object> arguments, ImmutableDictionary<String, Object> env)
+public static Object Apply(Object procedure, IEnumerable<Object> arguments, ImmutableDictionary<String, Object> env)
 {
     if (procedure is PrimitiveProcedure proc)
     {
@@ -869,48 +836,5 @@ Object Apply(Object procedure, IEnumerable<Object> arguments, ImmutableDictionar
 // }
 
 
-record PrimitiveProcedure(String name, Func<ImmutableDictionary<String, Object>, IEnumerable<Object>, Object> proc);
 
-record Symbol(String name);
-
-record CompoundProcedure(String name,
-    IJEnumerable<JToken> arglist,
-    IJEnumerable<JToken> body,
-                         ImmutableDictionary<String, Object> env,
-    IImmutableDictionary<string, Object> _meta) : IObj
-{
-
-    public IImmutableDictionary<string, object> meta()
-    {
-        return this._meta;
-    }
-
-    public IObj withMeta(IImmutableDictionary<string, object> meta)
-    {
-        return new CompoundProcedure(name, arglist, body, env, meta);
-    }
 }
-
-record CompoundProcedureGroup(String name, Dictionary<int, CompoundProcedure> procedures);
-
-
-// class ReplService : WebSocketBehavior
-// {
-//     protected override void OnMessage(MessageEventArgs e)
-//     {
-//         string input = e.Data;
-//         try
-//         {
-//             if (input != "")
-//             {
-//                 var v = Eval(Read(input), _globalEnv);
-//                 Send(PrintStr(v));
-//             }
-//         }
-//         catch (Exception ex)
-//         {
-//             Send(ex.Message);
-//         }
-//     }
-// }
-

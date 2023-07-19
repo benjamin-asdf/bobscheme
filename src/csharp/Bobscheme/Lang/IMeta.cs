@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 
-namespace bobscheme; 
+namespace Bobscheme.Lang; 
 
 public interface IMeta {
    IImmutableDictionary<string, Object> meta();
