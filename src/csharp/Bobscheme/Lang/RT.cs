@@ -3,19 +3,17 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Immutable;
 using bobscheme.csharp.Bobscheme.Lang;
 
-
 namespace Bobscheme.Lang.RT;
 
-
-public  record PrimitiveProcedure(String name, Func<ImmutableDictionary<String, Object>, IEnumerable<Object>, Object> proc);
+public  record PrimitiveProcedure(String name, Func<IEnv<String, Object>, IEnumerable<Object>, Object> proc);
 
 public  record Symbol(String name);
 
-public  record CompoundProcedure(String name,
+public record CompoundProcedure(String name,
     IJEnumerable<JToken> arglist,
     IJEnumerable<JToken> body,
-                         ImmutableDictionary<String, Object> env,
-    IImmutableDictionary<string, Object> _meta) : IObj
+                         IEnv<String, Object> env,
+    IImmutableDictionary<String,object> _meta) : IObj
 {
 
     public IImmutableDictionary<string, object> meta()
@@ -27,6 +25,7 @@ public  record CompoundProcedure(String name,
     {
         return new CompoundProcedure(name, arglist, body, env, meta);
     }
+
 }
 
 public record CompoundProcedureGroup(String name, Dictionary<int, CompoundProcedure> procedures);
@@ -56,7 +55,7 @@ static  Object Trampoline(Object k)
     return k;
 }
 
-public  static  IImmutableDictionary<string, Object> meta(Object o)
+public  static IImmutableDictionary<string, Object> meta(Object o)
 {
     if (o is IMeta m)
     {
@@ -65,7 +64,7 @@ public  static  IImmutableDictionary<string, Object> meta(Object o)
     return null;
 }
 
-public  static string PrintStr(Object o)
+public static string PrintStr(Object o)
 {
     if (o == Nil)
     {
@@ -82,21 +81,28 @@ public  static string PrintStr(Object o)
     return o.ToString();
 }
 
-static ImmutableDictionary<K, V> Merge<K, V>(params IDictionary<K, V>[] dictionaries)
+// Printer
+public static  void Print(Object o)
 {
-    var m = ImmutableDictionary<K, V>.Empty;
+    Console.WriteLine(PrintStr(o));
+}
+
+
+    static IEnv<K, V> Merge<K, V>(IEnv<K,V> env, params IEnv<K, V>[] dictionaries)
+    {
     foreach (var dict in dictionaries)
     {
         foreach (var kvp in dict)
         {
-            m = m.SetItem(kvp.Key, kvp.Value);
+            env = env.Extend(kvp.Key, kvp.Value);
         }
     }
-    return m;
+    return env;
 
 }
 
 static RT()
+
 {
     
 primitiveOperators.Add("+", new PrimitiveProcedure("+", (env, toAdd) =>
@@ -172,12 +178,6 @@ primitiveOperators.Add("swap!", new PrimitiveProcedure("swap!", (env, list) =>
     });
 
 }));
-
-// Printer
-void Print(Object o)
-{
-    Console.WriteLine(PrintStr(o));
-}
 
 
 primitiveOperators.Add("print", new PrimitiveProcedure("print", (env, list) =>
@@ -257,7 +257,7 @@ foreach (var kvp in primitiveOperators)
     _globalEnv = _globalEnv.Extend(kvp.Key, kvp.Value);;
 }
 _globalEnv = _globalEnv.Extend("nil", Nil);;
-    
+_globalEnv = _globalEnv.Extend("*global-env*", _globalEnv);;
     
 }
 
@@ -382,7 +382,7 @@ public static JToken Operator(JToken expr)
     return objArr.First();
 }
 
-public static List<Object> ListOfValues(IEnumerable<JToken> expr, ImmutableDictionary<String, Object> env)
+public static List<Object> ListOfValues(IEnumerable<JToken> expr, IEnv<String, Object> env)
 {
     return expr.Select((e) => Eval(e, env)).ToList();
 }
@@ -425,7 +425,7 @@ public static bool IsDo(JToken expr)
     return IsOperation(expr, "do");
 }
 
-public static Object EvalSequence(IEnumerable<JToken> expressions, ImmutableDictionary<String, Object> env)
+public static Object EvalSequence(IEnumerable<JToken> expressions, IEnv<String, Object> env)
 {
     if (expressions.Count() == 0)
     {
@@ -464,14 +464,14 @@ public static String DefinitionVariable(JToken expr)
 
 // the 10 in
 // ["define", "foo", 10]
-public static Object DefinitionValue(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object DefinitionValue(JToken expr, IEnv<String, Object> env)
 {
     var objArr = expr.ToObject<JToken[]>();
     var vExpr = objArr[2];
     return Eval(vExpr, env);
 }
 
-public static String EvalAssignment(JToken expr, ImmutableDictionary<String, Object> env)
+public static String EvalAssignment(JToken expr, IEnv<String, Object> env)
 {
     return DefineVariable(DefinitionVariable(expr), DefinitionValue(expr, env));
 
@@ -494,14 +494,15 @@ public static bool IsVariable(Object o)
     return false;
 }
 
-public static Object LookupVariable(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object LookupVariable(JToken expr, IEnv<String, Object> env)
 {
     var s = SymbolName(expr);
-    if (!env.ContainsKey(s))
+    if (!env.TryLookupVariable(s, out var val))
     {
         throw new Exception("Could not resolve symbol: " + s);
     }
-    return env[SymbolName(expr)];
+
+    return val;
 }
 
 public static bool IsIf(JToken expr)
@@ -557,18 +558,12 @@ public static IJEnumerable<JToken> LambdaBody(JToken expr)
     return expr.AsJEnumerable().Skip(2).AsJEnumerable();
 }
 
-public static CompoundProcedure EvaluateLambda(JToken expr, ImmutableDictionary<String, Object> env)
+public static CompoundProcedure EvaluateLambda(JToken expr, IEnv<String, Object> env)
 {
     var arglist = LambdaArglist(expr);
     var name = "anonymous-procedure" + "<" + arglist.Count() + ">";
     var body = LambdaBody(expr);
-    return new CompoundProcedure(name, arglist, body, env, ImmutableDictionary<String, Object>.Empty);
-}
-
-
-public static ImmutableDictionary<String, Object> ExpandEnv(ImmutableDictionary<String, Object> env, String k, Object v)
-{
-    return env.SetItem(k, v);
+    return new CompoundProcedure(name, arglist, body, env, ImmutableDictionary<string, object>.Empty);
 }
 
 public static IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
@@ -579,19 +574,19 @@ public static IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
 // todo &rest
 
 // 1. enhance the environment with bindings arglist -> arguements
-public static ImmutableDictionary<String, Object> ExtendEnvironment(
+public static IEnv<String, Object> ExtendEnvironment(
     IEnumerable<String> parameters,
     IEnumerable<Object> arguments,
-    ImmutableDictionary<String, Object> env)
+    IEnv<String, Object> env)
 {
     foreach (var pair in parameters.Zip(arguments))
     {
-        env = ExpandEnv(env, pair.First, pair.Second);
+        env = env.Extend(pair.First, pair.Second);
     }
     return env;
 }
 
-public static Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> arguments, ImmutableDictionary<String, Object> env)
+public static Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> arguments, IEnv<String, Object> env)
 {
     var parameters = ProcedureParameters(proc);
     if (parameters.Count() != arguments.Count())
@@ -606,7 +601,7 @@ public static Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<
 
 // [ "if", "predicate", "consequence", "alternative" ]
 
-public static Object EvaluateIf(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object EvaluateIf(JToken expr, IEnv<String, Object> env)
 {
 
     var objArr = expr.ToObject<JToken[]>();
@@ -638,7 +633,7 @@ public static bool IsMacroCreation(JToken expr)
     return IsOperation(expr, "create-macro");
 }
 
-public static Object EvaluateMacro(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object EvaluateMacro(JToken expr, IEnv<String, Object> env)
 {
     CompoundProcedure proc = EvaluateLambda(expr.Skip(1).First(), env);
     var newMeta = meta(proc);
@@ -671,7 +666,6 @@ public static JToken macroexpand1(JToken expr)
     {
         return expr;
     }
-
     var opSymbol = SymbolName(op1);
     if (_globalEnv.TryLookupVariable(opSymbol, out var op))
     {
@@ -700,7 +694,6 @@ public static JToken macroexpand(JToken expr)
 // ["let" ["a" 10 "b" ["+" "a" "a"]]]
 // eval first, second etc.
 
-
 public static bool IsLet(JToken expr)
 {
     return IsOperation(expr, "let");
@@ -709,7 +702,7 @@ public static bool IsLet(JToken expr)
 // first build local env
 // eval the body
 
-public static Object EvalLet(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object EvalLet(JToken expr, IEnv<String, Object> env)
 {
     var letExpr = expr.Skip(1);
     var bindings = letExpr.First().ToObject<JArray>();
@@ -727,7 +720,7 @@ public static Object EvalLet(JToken expr, ImmutableDictionary<String, Object> en
 
         var name = nameExpr.ToObject<String>();
         var v = Eval(valueExpr, localEnv);
-        localEnv = ExpandEnv(localEnv, name, v);
+        localEnv = localEnv.Extend(name, v);
 
     }
 
@@ -737,7 +730,7 @@ public static Object EvalLet(JToken expr, ImmutableDictionary<String, Object> en
 
 
 // Metacircular evaluator
-public static Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object Eval1(JToken expr, IEnv<String, Object> env)
 
 {
 
@@ -804,14 +797,14 @@ public static Object Eval1(JToken expr, ImmutableDictionary<String, Object> env)
     return null;
 }
 
-public static Object Eval(JToken expr, ImmutableDictionary<String, Object> env)
+public static Object Eval(JToken expr, IEnv<String, Object> env)
 {
     return Trampoline(Eval1(expr, env));
 }
 
 
 // evaluated args
-public static Object Apply(Object procedure, IEnumerable<Object> arguments, ImmutableDictionary<String, Object> env)
+public static Object Apply(Object procedure, IEnumerable<Object> arguments, IEnv<String, Object> env)
 {
     if (procedure is PrimitiveProcedure proc)
     {
@@ -827,14 +820,5 @@ public static Object Apply(Object procedure, IEnumerable<Object> arguments, Immu
     }
 
 }
-
-// void StartWebSocketServer()
-// {
-//     var wssv = new WebSocketSharp.Server.WebSocketServer ("ws://localhost:1818");
-//     wssv.AddWebSocketService<ReplService> ("/repl");
-//     wssv.Start();
-// }
-
-
 
 }
