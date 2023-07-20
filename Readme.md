@@ -45,3 +45,32 @@ Here are some sample BobScheme code snippets in the form of JSON:
 ["sum-of-squares", 3, 4]
 ```
 
+# Atom (like Cloures atom)
+
+["define", "make-adder", ["lambda", ["n"], ["let", ["state", ["atom", "n"]], ["lambda", ["i"], ["swap!", "state", "+",  "i"]]]]]
+
+["define", "machine", ["make-adder", 0]]
+
+["machine", 10]
+
+# Interop
+
+["new", "System.Object"]
+
+["func", ["lambda", ["a"] "a"] ]
+
+["action", ["lambda", []]]
+
+[".", "method", "obj"]
+
+# Gpt fact
+```json
+["define", "fact", 
+   ["lambda", ["n"], 
+      ["if", ["=", "n", 0], 
+         1, 
+         ["*", "n", ["fact", ["-", "n", 1]]]
+      ]
+   ]
+]
+```

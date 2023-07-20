@@ -111,6 +111,15 @@ primitiveOperators.Add("-", new PrimitiveProcedure("-", (env, list) => {
 })
 );
 
+primitiveOperators.Add("*", new PrimitiveProcedure("*", (env, toMultiply) =>
+{
+    if (toMultiply.Any(x => !(x is long)))
+        throw new InvalidOperationException($"Expected number(s), found {string.Join(", ", toMultiply.Select(x => x.GetType()))}");
+
+    return toMultiply.Cast<long>().Aggregate((product, next) => product * next);
+}));
+
+
 primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", (env, list) =>
 {
 
@@ -250,9 +259,6 @@ foreach (var file in files)
     var v = Eval(expr, _globalEnv);
     Print(v);
 }
-
-StartWebSocketServer();
-
 
 if (doRepl)
 
@@ -892,25 +898,4 @@ record CompoundProcedure(String name,
 }
 
 record CompoundProcedureGroup(String name, Dictionary<int, CompoundProcedure> procedures);
-
-
-// class ReplService : WebSocketBehavior
-// {
-//     protected override void OnMessage(MessageEventArgs e)
-//     {
-//         string input = e.Data;
-//         try
-//         {
-//             if (input != "")
-//             {
-//                 var v = Eval(Read(input), _globalEnv);
-//                 Send(PrintStr(v));
-//             }
-//         }
-//         catch (Exception ex)
-//         {
-//             Send(ex.Message);
-//         }
-//     }
-// }
 
