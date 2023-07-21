@@ -1,5 +1,12 @@
 A scheme using json data as code, implemented in C#.
 
+Blog: <https://faster-than-light-memes.xyz/bobscheme-1.html>
+
+The basic lambda calculus kinda thing. There are functions, there are values.
+It is tail recursive. There is state via reference cells.
+
+There is a local env and lexical binding.
+
 # Syntax
 
 ## Symbols
@@ -12,7 +19,7 @@ is the symbol `foo`.
 
 # Tail recursion
 
-I use a =trampoline= to achieve tail recursion, even though dotnet does not.
+I use a `trampoline` to achieve tail recursion, even though dotnet does not.
 
 
 ```sh
@@ -49,6 +56,8 @@ Here are some sample BobScheme code snippets in the form of JSON:
 
 # Atom (like Clojure atom)
 
+## lexical binding
+
 ```json
 ["define", "make-adder", ["lambda", ["n"], ["let", ["state", ["atom", "n"]], ["lambda", ["i"], ["swap!", "state", "+",  "i"]]]]]
 
@@ -60,7 +69,9 @@ Here are some sample BobScheme code snippets in the form of JSON:
 
 # Interop
 
-(ideas)
+(ideas, ... )
+
+Interop would be annoying to get right correctly because of dotnet generics and its complicated type names.
 
 ```json
 ["new", "System.Object"]
@@ -76,10 +87,10 @@ Here are some sample BobScheme code snippets in the form of JSON:
 # GPT factorial
 
 ```json
-["define", "fact", 
-   ["lambda", ["n"], 
-      ["if", ["=", "n", 0], 
-         1, 
+["define", "fact",
+   ["lambda", ["n"],
+      ["if", ["=", "n", 0],
+         1,
          ["*", "n", ["fact", ["-", "n", 1]]]
       ]
    ]
