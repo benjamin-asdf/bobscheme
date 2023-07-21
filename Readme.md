@@ -19,7 +19,6 @@ fib-tail-rec
 55
 ```
 
-
 # Chat GPT examples
 
 Here are some sample BobScheme code snippets in the form of JSON:
@@ -45,16 +44,22 @@ Here are some sample BobScheme code snippets in the form of JSON:
 ["sum-of-squares", 3, 4]
 ```
 
-# Atom (like Cloures atom)
+# Atom (like Clojure atom)
 
+```json
 ["define", "make-adder", ["lambda", ["n"], ["let", ["state", ["atom", "n"]], ["lambda", ["i"], ["swap!", "state", "+",  "i"]]]]]
 
 ["define", "machine", ["make-adder", 0]]
 
 ["machine", 10]
+```
+
 
 # Interop
 
+(ideas)
+
+```json
 ["new", "System.Object"]
 
 ["func", ["lambda", ["a"] "a"] ]
@@ -62,8 +67,11 @@ Here are some sample BobScheme code snippets in the form of JSON:
 ["action", ["lambda", []]]
 
 [".", "method", "obj"]
+```
 
-# Gpt fact
+
+# GPT factorial
+
 ```json
 ["define", "fact", 
    ["lambda", ["n"], 
