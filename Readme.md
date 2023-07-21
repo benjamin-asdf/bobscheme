@@ -10,7 +10,10 @@ A scheme using json data as code, implemented in C#.
 
 is the symbol `foo`.
 
-# tailr recursive fib
+# Tail recursion
+
+I use a =trampoline= to achieve tail recursion, even though dotnet does not.
+
 
 ```sh
 dotnet run src/fib-iter.json src/fib.json src/call-fib.json
