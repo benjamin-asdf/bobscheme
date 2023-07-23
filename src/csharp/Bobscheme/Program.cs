@@ -1,24 +1,28 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using Bobscheme.Lang.RT;
 
 string[] prompts = { "user> ", "what next?> ", "what is my purpose?> ", "say the next piece of the program> " };
+
+
+// I would ship this with the release artifact
+var coreDir = "src/json/core/";
+foreach(var file in new System.IO.DirectoryInfo(coreDir).GetFiles())
+{
+    RT.Load(file.ToString());
+
+}
+
 
 var files = args.Where(f => f != "--repl");
 var doRepl = args.Contains("--repl");
 
 foreach (var file in files)
 {
-    // I want to wrap implicity with do but the commas
-    string json = File.ReadAllText(file);
-    var expr = RT.Read(json);
-    var v = RT.Eval(expr, RT._globalEnv);
-    RT.Print(v);
+    RT.Print(RT.Load(file));
 }
 
 
 if (doRepl)
-
 {
     Repl();
 

@@ -1,0 +1,66 @@
+ChatGPT> the most straightforward way to add interop to bobscheme
+<gpt-end-of-prompt>
+To add interop to Bobscheme, we will need to extend it to interact with underlying .NET classes, objects, and methods since Bobscheme is built on .Net. This will involve creating special form handlers for .NET class instantiation, static and instance method invocation.
+
+1. Class Instantiation: To create a new instance of a .NET class in Bobscheme, we'll add a `new` special form. This would look like `(new 'Namespace.Class arg1 arg2...)` to create an instance of `Namespace.Class` with arguments `arg1, arg2...` to its constructor.
+
+2. Static Methods Calling: For calling static methods on a .NET class, we'll add another special form, like `(staticMethod 'Namespace.Class 'MethodName arg1 arg2...)`.
+
+3. Instance Methods Calling: For calling instance methods on instantiated objects, we can add a `(.instanceMethodName instance arg1 arg2...)` form.
+
+Code to implement these three features could be:
+
+For class instantiation:
+```csharp
+primitiveOperators.Add("new", new PrimitiveProcedure("new", (env, list) =>
+{
+    var className = (string)list.First();
+    var args = list.Skip(1).ToArray();
+    var type = Type.GetType(className);
+    if (type == null)
+        throw new ArgumentException($"Cannot find class {className}");
+
+    var result = Activator.CreateInstance(type, args);
+    if (result == null)
+        throw new Exception($"Failed to create instance of {className}");
+
+    return result;
+}));
+```
+
+For static method invocation:
+```csharp
+primitiveOperators.Add("staticMethod", new PrimitiveProcedure("staticMethod", (env, list) =>
+{
+    var className = (string)list.First();
+    var methodName = (string)list.Skip(1).First();
+    var args = list.Skip(2).ToArray();
+    var type = Type.GetType(className);
+    if (type == null)
+        throw new ArgumentException($"Cannot find class {className}");
+    var method = type.GetMethod(methodName);
+    if (method == null)
+        throw new ArgumentException($"Cannot find method {methodName} in class {className}");
+
+    return method.Invoke(null, args);
+}));
+```
+
+For instance method invocation:
+```csharp
+primitiveOperators.Add(".", new PrimitiveProcedure(".", (env, list) =>
+{
+    var instance = list.First();
+    var methodName = (string)list.Skip(1).First();
+    var args = list.Skip(2).ToArray();
+    var type = instance.GetType();
+    var method = type.GetMethod(methodName);
+    if (method == null)
+        throw new ArgumentException($"Cannot find method {methodName} in class {instance.GetType().Name}");
+
+    return method.Invoke(instance, args);
+}));
+```
+These are just direct translations of C# interop calls to Bobscheme and are not idiomatic Lisp-style interops. They do not handle the method overloading that is prevalent in .NET. And they directly translate C# exceptions to the Bobscheme user, which is probably not what you want. Hence, a more mature implementation of interop would probably use a different mechanism, but this should be a good starting point.
+
+ChatGPT>

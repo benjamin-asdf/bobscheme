@@ -1,0 +1,32 @@
+[
+  "define",
+  "defmacro",
+  [
+    "create-macro",
+    [
+      "lambda",
+      ["name", "arglist", "body"],
+      [
+        "list",
+        [
+          "quote", "define"
+        ],
+        "name",
+        [
+          "list",
+          [
+            "quote", "create-macro"
+          ],
+          [
+            "list",
+            [
+              "quote", "lambda"
+            ],
+            "arglist",
+            "body"
+          ]
+        ]
+      ]
+    ]
+  ]
+]

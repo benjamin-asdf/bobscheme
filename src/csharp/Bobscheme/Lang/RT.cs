@@ -4,15 +4,15 @@ using System.Collections.Immutable;
 
 namespace Bobscheme.Lang.RT;
 
-public record PrimitiveProcedure(String name, Func<IEnv<String, Object>, IEnumerable<Object>, Object> proc);
+public record PrimitiveProcedure(string name, Func<IEnv<string, Object>, IEnumerable<Object>, Object> proc);
 
-public record Symbol(String name);
+public record Symbol(string name);
 
-public record CompoundProcedure(String name,
+public record CompoundProcedure(string name,
     IJEnumerable<JToken> arglist,
     IJEnumerable<JToken> body,
-                         IEnv<String, Object> env,
-    IImmutableDictionary<String, object> _meta) : IObj
+                         IEnv<string, Object> env,
+    IImmutableDictionary<string, object> _meta) : IObj
 {
 
     public IImmutableDictionary<string, object> meta()
@@ -27,7 +27,7 @@ public record CompoundProcedure(String name,
 
 }
 
-public record CompoundProcedureGroup(String name, Dictionary<int, CompoundProcedure> procedures);
+public record CompoundProcedureGroup(string name, Dictionary<int, CompoundProcedure> procedures);
 
 
 public static class RT
@@ -35,7 +35,7 @@ public static class RT
 
     public static Random random = new Random();
 
-    public static Dictionary<String, PrimitiveProcedure> primitiveOperators = new();
+    public static Dictionary<string, PrimitiveProcedure> primitiveOperators = new();
 
     public record NilType() : IPrintable
     {
@@ -47,7 +47,7 @@ public static class RT
 
     public static Object Nil = new NilType();
 
-    public static IEnv<String, Object> _globalEnv = new ImmutableEnv(ImmutableDictionary<string, object>.Empty);
+    public static IEnv<string, Object> _globalEnv = new ImmutableEnv(ImmutableDictionary<string, object>.Empty);
 
     static bool IsThunk(Object o)
     {
@@ -72,22 +72,6 @@ public static class RT
         return null;
     }
 
-    public static string PrintStr(Object o)
-    {
-        if (o == Nil)
-        {
-            return "nil";
-        }
-        if (o is IJEnumerable<JToken> je)
-        {
-            return o.ToString();
-        }
-        if (o is IPrintable printable)
-        {
-            return printable.PrintStr();
-        }
-        return o.ToString();
-    }
 
     // Printer
     public static void Print(Object o)
@@ -107,6 +91,16 @@ public static class RT
         }
         return env;
 
+
+
+    }
+
+    public static Object Load(string file)
+    {
+        string json = File.ReadAllText(file);
+        var expr = RT.Read(json);
+        var v = RT.Eval(expr, RT._globalEnv);
+        return v;
     }
 
     static RT()
@@ -301,7 +295,7 @@ public static class RT
     {
         if (expr.Type == JTokenType.String)
         {
-            var s = expr.ToObject<String>();
+            var s = expr.ToObject<string>();
             return s.FirstOrDefault() == '\'';
         }
         return false;
@@ -317,7 +311,7 @@ public static class RT
     {
         if (expr.Type == JTokenType.String)
         {
-            var s = expr.ToObject<String>();
+            var s = expr.ToObject<string>();
             return s;
         }
         throw new Exception("not a symbol? " + expr);
@@ -327,7 +321,7 @@ public static class RT
     {
         if (expr.Type == JTokenType.String)
         {
-            var s = expr.ToObject<String>();
+            var s = expr.ToObject<string>();
             return s;
             // string substring = s.Substring(1, s.Length - 1);
             // return substring;
@@ -392,7 +386,7 @@ public static class RT
         return objArr.First();
     }
 
-    public static List<Object> ListOfValues(IEnumerable<JToken> expr, IEnv<String, Object> env)
+    public static List<Object> ListOfValues(IEnumerable<JToken> expr, IEnv<string, Object> env)
     {
         return expr.Select((e) => Eval(e, env)).ToList();
     }
@@ -403,18 +397,14 @@ public static class RT
         return objArr.Skip(1);
     }
 
-    public static bool IsOperation(JToken expr, String s)
+    public static bool IsOperation(JToken expr, string s)
     {
-        if (expr.Type == JTokenType.Array)
-        {
-            var objArr = expr.ToObject<JToken[]>();
-            var op = objArr.First();
-            if (op.ToObject<String>() == s)
-            {
-
-                return true;
+        if (expr is IJEnumerable<JToken> lst) {
+            if (lst.Count() > 0) {
+                if (lst.First().Type == JTokenType.String) {
+                    return lst.First().ToObject<string>() == s;
+                }
             }
-
         }
         return false;
     }
@@ -435,7 +425,7 @@ public static class RT
         return IsOperation(expr, "do");
     }
 
-    public static Object EvalSequence(IEnumerable<JToken> expressions, IEnv<String, Object> env)
+    public static Object EvalSequence(IEnumerable<JToken> expressions, IEnv<string, Object> env)
     {
         if (expressions.Count() == 0)
         {
@@ -453,7 +443,7 @@ public static class RT
 
     }
 
-    public static String DefineVariable(String symbol, Object defVal)
+    public static string DefineVariable(string symbol, Object defVal)
     {
         _globalEnv = _globalEnv.Extend(symbol, defVal);
         return symbol;
@@ -461,7 +451,7 @@ public static class RT
 
     // the "foo" in
     // ["define", "foo", 10]
-    public static String DefinitionVariable(JToken expr)
+    public static string DefinitionVariable(JToken expr)
     {
         var objArr = expr.ToObject<JToken[]>();
         var symbolExpr = objArr[1];
@@ -469,19 +459,19 @@ public static class RT
         {
             throw new Exception("Expected symbol: " + symbolExpr);
         }
-        return symbolExpr.ToObject<String>();
+        return symbolExpr.ToObject<string>();
     }
 
     // the 10 in
     // ["define", "foo", 10]
-    public static Object DefinitionValue(JToken expr, IEnv<String, Object> env)
+    public static Object DefinitionValue(JToken expr, IEnv<string, Object> env)
     {
         var objArr = expr.ToObject<JToken[]>();
         var vExpr = objArr[2];
         return Eval(vExpr, env);
     }
 
-    public static String EvalAssignment(JToken expr, IEnv<String, Object> env)
+    public static string EvalAssignment(JToken expr, IEnv<string, Object> env)
     {
         return DefineVariable(DefinitionVariable(expr), DefinitionValue(expr, env));
 
@@ -497,14 +487,14 @@ public static class RT
         {
             return true;
         }
-        if (o is String s)
+        if (o is string s)
         {
             return true;
         }
         return false;
     }
 
-    public static Object LookupVariable(JToken expr, IEnv<String, Object> env)
+    public static Object LookupVariable(JToken expr, IEnv<string, Object> env)
     {
         var s = SymbolName(expr);
         if (!env.TryLookupVariable(s, out var val))
@@ -568,7 +558,7 @@ public static class RT
         return expr.AsJEnumerable().Skip(2).AsJEnumerable();
     }
 
-    public static CompoundProcedure EvaluateLambda(JToken expr, IEnv<String, Object> env)
+    public static CompoundProcedure EvaluateLambda(JToken expr, IEnv<string, Object> env)
     {
         var arglist = LambdaArglist(expr);
         var name = "anonymous-procedure" + "<" + arglist.Count() + ">";
@@ -576,18 +566,18 @@ public static class RT
         return new CompoundProcedure(name, arglist, body, env, ImmutableDictionary<string, object>.Empty);
     }
 
-    public static IEnumerable<String> ProcedureParameters(CompoundProcedure proc)
+    public static IEnumerable<string> ProcedureParameters(CompoundProcedure proc)
     {
-        return proc.arglist.AsEnumerable().Select((JToken e) => e.ToObject<String>());
+        return proc.arglist.AsEnumerable().Select((JToken e) => e.ToObject<string>());
     }
 
     // todo &rest
 
     // 1. enhance the environment with bindings arglist -> arguements
-    public static IEnv<String, Object> ExtendEnvironment(
-        IEnumerable<String> parameters,
+    public static IEnv<string, Object> ExtendEnvironment(
+        IEnumerable<string> parameters,
         IEnumerable<Object> arguments,
-        IEnv<String, Object> env)
+        IEnv<string, Object> env)
     {
         foreach (var pair in parameters.Zip(arguments))
         {
@@ -596,7 +586,7 @@ public static class RT
         return env;
     }
 
-    public static Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> arguments, IEnv<String, Object> env)
+    public static Object ApplyCompountProcedure(CompoundProcedure proc, IEnumerable<Object> arguments, IEnv<string, Object> env)
     {
         var parameters = ProcedureParameters(proc);
         if (parameters.Count() != arguments.Count())
@@ -611,7 +601,7 @@ public static class RT
 
     // [ "if", "predicate", "consequence", "alternative" ]
 
-    public static Object EvaluateIf(JToken expr, IEnv<String, Object> env)
+    public static Object EvaluateIf(JToken expr, IEnv<string, Object> env)
     {
 
         var objArr = expr.ToObject<JToken[]>();
@@ -643,7 +633,7 @@ public static class RT
         return IsOperation(expr, "create-macro");
     }
 
-    public static Object EvaluateMacro(JToken expr, IEnv<String, Object> env)
+    public static Object EvaluateMacro(JToken expr, IEnv<string, Object> env)
     {
         CompoundProcedure proc = EvaluateLambda(expr.Skip(1).First(), env);
         var newMeta = meta(proc);
@@ -677,7 +667,7 @@ public static class RT
             return expr;
         }
         var opSymbol = SymbolName(op1);
-        if (_globalEnv.TryLookupVariable(opSymbol, out var op))
+        if (!_globalEnv.TryLookupVariable(opSymbol, out var op))
         {
             return expr;
         }
@@ -712,7 +702,7 @@ public static class RT
     // first build local env
     // eval the body
 
-    public static Object EvalLet(JToken expr, IEnv<String, Object> env)
+    public static Object EvalLet(JToken expr, IEnv<string, Object> env)
     {
         var letExpr = expr.Skip(1);
         var bindings = letExpr.First().ToObject<JArray>();
@@ -728,7 +718,7 @@ public static class RT
                 throw new Exception("Expected symbol for binding name in let: " + nameExpr);
             }
 
-            var name = nameExpr.ToObject<String>();
+            var name = nameExpr.ToObject<string>();
             var v = Eval(valueExpr, localEnv);
             localEnv = localEnv.Extend(name, v);
 
@@ -740,7 +730,7 @@ public static class RT
 
 
     // Metacircular evaluator
-    public static Object Eval1(JToken expr, IEnv<String, Object> env)
+    public static Object Eval1(JToken expr, IEnv<string, Object> env)
     {
         expr = macroexpand(expr);
 
@@ -805,14 +795,14 @@ public static class RT
         return null;
     }
 
-    public static Object Eval(JToken expr, IEnv<String, Object> env)
+    public static Object Eval(JToken expr, IEnv<string, Object> env)
     {
         return Trampoline(Eval1(expr, env));
     }
 
 
     // evaluated args
-    public static Object Apply(Object procedure, IEnumerable<Object> arguments, IEnv<String, Object> env)
+    public static Object Apply(Object procedure, IEnumerable<Object> arguments, IEnv<string, Object> env)
     {
         if (procedure is PrimitiveProcedure proc)
         {

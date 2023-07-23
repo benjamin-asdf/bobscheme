@@ -5,7 +5,7 @@ using Bobscheme.Lang;
 
 namespace Bobscheme.Lang;
 
-public record ImmutableEnv(ImmutableDictionary<String,Object> dict) : IEnv<String,Object>, IPrintable
+public record ImmutableEnv(ImmutableDictionary<string,Object> dict) : IEnv<string,Object>, IPrintable
 {
     public IEnv<string, object> Extend(string key, object value)
     {

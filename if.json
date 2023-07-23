@@ -1,8 +1,0 @@
-
-["begin"
- ["if", "nil", 10, ["foo"] ]
- ["if", "nil", 10, ["foo"] ]
- ["if", "nil", 10, ["foo"] ]
- ["if", "nil", 10, ["foo"] ]
- ["if", "nil", 10, ["foo"] ]
-]
