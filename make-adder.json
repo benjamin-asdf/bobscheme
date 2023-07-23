@@ -1,5 +1,21 @@
-["define", "make-adder", ["lambda", ["n"], ["let", ["state", ["atom", "n"]], ["lambda", ["i"], ["swap!", "state", "+",  "i"]]]]]
+[
+  "define",
+  "make-adder",
+  [
+    "lambda", ["n"],
+    [
+      "let",
+      [
+        "state", ["atom", "n"]
+      ],
+      [
+        "lambda", ["i"],
+        ["swap!", "state", "+", "i"]
+      ]
+    ]
+  ]
+]
 
-;; ["define", "machine", ["make-adder", 0]]
+["define", "machine", ["make-adder", 0]]
 
-;; ["machine", 10]
+["machine", 10]
