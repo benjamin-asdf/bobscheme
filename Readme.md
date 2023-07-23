@@ -31,11 +31,11 @@ fib-tail-rec
 
 # Small core
 
-I flexed the Lisp muscles by implementing `defmacro` in Bobscheme user land `src/json/core/1-defmacro.json`. 
-Chat gpt provided the implementation.
+The Bobscheme runtime has a primitive `create-macro`. I flexed the Lisp muscles by implementing `defmacro`
+in Bobscheme user land `src/json/core/1-defmacro.json`.  Chat gpt provided the implementation.
 
-The bobscheme runtime just provided a primitive `create-macro`. And now I can express macros like `when` in
-terms of `defmacro`. Making it obvious to you, the Bobscheme user that you can create any kind of syntax yourself.
+Now the user can express macros like `when` in terms of `defmacro`.
+Making it obvious to you, the Bobscheme user, that you can create any kind of syntax yourself.
 
 # Chat GPT examples
 
