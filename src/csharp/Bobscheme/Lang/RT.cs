@@ -150,6 +150,14 @@ public static class RT
         })
         );
 
+        primitiveOperators.Add("*", new PrimitiveProcedure("*", (env, toMultiply) =>
+        {
+            if (toMultiply.Any(x => !(x is long)))
+                throw new InvalidOperationException($"Expected number(s), found {string.Join(", ", toMultiply.Select(x => x.GetType()))}");
+
+            return toMultiply.Cast<long>().Aggregate((product, next) => product * next);
+        }));
+
         primitiveOperators.Add("printEnv", new PrimitiveProcedure("printEnv", (env, list) =>
         {
             Print(_globalEnv);
@@ -399,9 +407,12 @@ public static class RT
 
     public static bool IsOperation(JToken expr, string s)
     {
-        if (expr is IJEnumerable<JToken> lst) {
-            if (lst.Count() > 0) {
-                if (lst.First().Type == JTokenType.String) {
+        if (expr is IJEnumerable<JToken> lst)
+        {
+            if (lst.Count() > 0)
+            {
+                if (lst.First().Type == JTokenType.String)
+                {
                     return lst.First().ToObject<string>() == s;
                 }
             }
