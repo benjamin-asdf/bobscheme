@@ -1,4 +1,4 @@
-namespace bobscheme.csharp.Bobscheme.Lang;
+namespace Bobscheme.Lang;
 
 public interface IPrintable
 {
