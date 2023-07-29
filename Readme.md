@@ -63,21 +63,21 @@ Paul Graham was describing this function as a small example code snippet to get 
         ]
       ]
     ]
+```
 
 Def a machine:
-
+```json
     ["define", "machine", ["make-adder", 0]]
-
-Use the machine:
-
-    ["machine", 10]
-
-=> 10
-
-    ["machine", 15]
-
-=> 25
 ```
+Use the machine:
+```json
+    ["machine", 10]
+```
+=> 10
+```json
+    ["machine", 15]
+```
+=> 25
 
 The Bobscheme code is almost the same as the Clojure code:
 
