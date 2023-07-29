@@ -37,6 +37,55 @@ in Bobscheme user land [Defmacro JSON](src/json/core/1-defmacro.json). Chat gpt 
 Now the user can express macros like `when` in terms of `defmacro`.
 Making it obvious to you, the Bobscheme user, that you can create any kind of syntax yourself.
 
+# Foo Accumulator
+
+This Bobscheme code defines a function called `make-adder`.
+This function returns a function object, that accumulates the sum of all the args it was called with.
+Paul Graham was describing this function as a small example code snippet to get a feel for the power of a language ([2002](http://www.paulgraham.com/icad.html)).
+
+    [
+      "define",
+      "make-adder",
+      [
+        "lambda", ["n"],
+        [
+          "let",
+          [
+            "state", ["atom", "n"]
+          ],
+          [
+            "lambda", ["i"],
+            ["swap!", "state", "+", "i"]
+          ]
+        ]
+      ]
+    ]
+
+Def a machine:
+
+    ["define", "machine", ["make-adder", 0]]
+
+Use the machine:
+
+    ["machine", 10]
+
+=> 10
+
+    ["machine", 15]
+
+=> 25
+
+The Bobscheme code is almost the same as the Clojure code:
+
+    (defn make-adder [n]
+      (let [state (atom n)]
+        (fn [i]
+          (swap! state + i))))
+
+Because the ideas are the same, we get to call that `dialects` of Lisp.
+
+The Bobscheme is just annoyingly bloated with commata and quotation marks, inheriting from its JSON notation heritage.
+
 # Chat GPT examples
 
 Here are some sample BobScheme code snippets in the form of JSON:
