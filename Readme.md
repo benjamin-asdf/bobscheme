@@ -39,6 +39,8 @@ Making it obvious to you, the Bobscheme user, that you can create any kind of sy
 
 # Foo Accumulator
 
+Shwing lexical binding and a clojure-like reference type.
+
 This Bobscheme code defines a function called `make-adder`.
 This function returns a function object, that accumulates the sum of all the args it was called with.
 Paul Graham was describing this function as a small example code snippet to get a feel for the power of a language ([2002](http://www.paulgraham.com/icad.html)).
@@ -110,19 +112,6 @@ Here are some sample BobScheme code snippets in the form of JSON:
 ```json
 ["sum-of-squares", 3, 4]
 ```
-
-# Atom (like Clojure atom)
-
-## lexical binding
-
-```json
-["define", "make-adder", ["lambda", ["n"], ["let", ["state", ["atom", "n"]], ["lambda", ["i"], ["swap!", "state", "+",  "i"]]]]]
-
-["define", "machine", ["make-adder", 0]]
-
-["machine", 10]
-```
-
 
 # Interop
 
