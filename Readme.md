@@ -45,6 +45,7 @@ This Bobscheme code defines a function called `make-adder`.
 This function returns a function object, that accumulates the sum of all the args it was called with.
 Paul Graham was describing this function as a small example code snippet to get a feel for the power of a language ([2002](http://www.paulgraham.com/icad.html)).
 
+```json
     [
       "define",
       "make-adder",
@@ -76,13 +77,16 @@ Use the machine:
     ["machine", 15]
 
 => 25
+```
 
 The Bobscheme code is almost the same as the Clojure code:
 
+```clojure
     (defn make-adder [n]
       (let [state (atom n)]
         (fn [i]
           (swap! state + i))))
+```
 
 Because the ideas are the same, we get to call that `dialects` of Lisp.
 
