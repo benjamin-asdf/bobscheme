@@ -39,7 +39,7 @@ Making it obvious to you, the Bobscheme user, that you can create any kind of sy
 
 # Foo Accumulator
 
-Shwing lexical binding and a clojure-like reference type.
+Here: Lexical binding and a clojure-like reference type.
 
 This Bobscheme code defines a function called `make-adder`.
 This function returns a function object, that accumulates the sum of all the args it was called with.
