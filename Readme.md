@@ -117,23 +117,6 @@ Here are some sample BobScheme code snippets in the form of JSON:
 ["sum-of-squares", 3, 4]
 ```
 
-# Interop
-
-(ideas, ... )
-
-Interop would be annoying to get right correctly because of dotnet generics and its complicated type names.
-
-```json
-["new", "System.Object"]
-
-["func", ["lambda", ["a"] "a"] ]
-
-["action", ["lambda", []]]
-
-[".", "method", "obj"]
-```
-
-
 # GPT factorial
 
 ```json
@@ -146,3 +129,20 @@ Interop would be annoying to get right correctly because of dotnet generics and 
    ]
 ]
 ```
+
+
+<!-- # Interop -->
+
+<!-- (ideas, ... ) -->
+
+<!-- Interop would be annoying to get right correctly because of dotnet generics and its complicated type names. -->
+
+<!-- ```json -->
+<!-- ["new", "System.Object"] -->
+
+<!-- ["func", ["lambda", ["a"] "a"] ] -->
+
+<!-- ["action", ["lambda", []]] -->
+
+<!-- [".", "method", "obj"] -->
+<!-- ``` -->
